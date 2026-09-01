@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Environment / secrets
+.env
+.env.local
+
+# Testing / tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

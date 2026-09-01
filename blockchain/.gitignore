@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Hardhat build artifacts
+cache/
+artifacts/
+coverage/
+coverage.json
+typechain-types/
+
+# Environment / secrets
+.env
+
+# Misc
+npm-debug.log*

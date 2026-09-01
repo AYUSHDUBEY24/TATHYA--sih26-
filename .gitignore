@@ -1,0 +1,13 @@
+# Environment / secrets — NEVER commit real secrets
+.env
+.env.local
+.env.*.local
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.idea/
+.vscode/

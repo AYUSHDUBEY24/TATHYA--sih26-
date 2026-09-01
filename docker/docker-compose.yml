@@ -1,0 +1,53 @@
+# docker-compose.yml — SIH26190 Phase 1 (Foundation) infrastructure
+#
+# Usage (from the repository root):
+#   docker compose -f docker/docker-compose.yml --env-file .env up -d
+#
+# Or from inside the docker/ directory (reads docker/.env if present):
+#   cd docker && docker compose up -d
+#
+# Only the two services required by the prototype are defined here:
+#   - PostgreSQL 16 with the pgvector extension
+#   - MinIO object storage (actual document files live here)
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: sih26190-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sih}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sih_local_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-sih26190}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sih} -d ${POSTGRES_DB:-sih26190}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: sih26190-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-sih_local_dev}
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # Web console
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  miniodata:

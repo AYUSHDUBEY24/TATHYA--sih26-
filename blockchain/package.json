@@ -1,0 +1,16 @@
+{
+  "name": "sih26190-blockchain",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hardhat skeleton for the SIH26190 document hash anchoring layer (contract arrives in Phase 7).",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "node": "hardhat node",
+    "clean": "hardhat clean"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "hardhat": "^2.22.0"
+  }
+}

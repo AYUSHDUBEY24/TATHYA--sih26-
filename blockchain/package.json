@@ -2,11 +2,12 @@
   "name": "sih26190-blockchain",
   "version": "0.1.0",
   "private": true,
-  "description": "Hardhat skeleton for the SIH26190 document hash anchoring layer (contract arrives in Phase 7).",
+  "description": "Hardhat project for the SIH26190 blockchain integrity-anchor layer (DocumentIntegrity contract).",
   "scripts": {
     "compile": "hardhat compile",
     "test": "hardhat test",
     "node": "hardhat node",
+    "deploy": "hardhat run scripts/deploy.js --network localhost",
     "clean": "hardhat clean"
   },
   "devDependencies": {

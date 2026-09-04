@@ -298,8 +298,7 @@ def test_soft_deleted_document_keeps_history_in_db(client, mem_storage):
     from uuid import UUID as UuidType
 
     from app.models.document_version import DocumentVersion as DV
-
-    import conftest  # noqa: PLC0415 — reuse the pytest-loaded module instance
+    from tests.conftest import TestSession
 
     io1, _, _, doc = setup_doc_with_versions(client)
 
@@ -313,7 +312,7 @@ def test_soft_deleted_document_keeps_history_in_db(client, mem_storage):
         client.get(f"{DOCS}/{doc['id']}/integrity", headers=auth(io1)).status_code == 404
     )
     # …but the version rows still exist in the database (historical record).
-    db = conftest.TestSession()
+    db = TestSession()
     remaining = db.query(DV).filter(DV.document_id == UuidType(doc["id"])).count()
     db.close()
     assert remaining == 3

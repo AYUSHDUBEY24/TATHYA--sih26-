@@ -133,3 +133,76 @@ export interface AuditLogEntry {
   metadata: Record<string, unknown>;
   created_at: string;
 }
+
+/* --- Blockchain (Phase 7) --- */
+
+export interface BlockchainStatusResult {
+  document_id: string;
+  version_id: string | null;
+  version_number: number | null;
+  blockchain_key: string | null;
+  status: string;
+  transaction_hash: string | null;
+  block_number: number | null;
+  anchored_at: string | null;
+  error_message: string | null;
+}
+
+export interface BlockchainVerifyResult {
+  status: string;
+  document_id: string;
+  version: number;
+  file_hash: string;
+  stored_hash: string;
+  blockchain_hash: string | null;
+  blockchain_key: string | null;
+  transaction_hash: string | null;
+  verified_at: string | null;
+}
+
+export interface SearchHit {
+  document_id: string;
+  case_id: string;
+  case_number: string;
+  case_title: string;
+  file_name: string;
+  document_type: string;
+  classification: string;
+  description: string | null;
+  uploader_username: string | null;
+  current_version_number: number | null;
+  created_at: string;
+  extraction_method: string | null;
+  extraction_status: string | null;
+  snippet: string | null;
+  matched_text: boolean;
+}
+
+export interface SearchResponse {
+  query: string;
+  total: number;
+  limit: number;
+  offset: number;
+  results: SearchHit[];
+}
+
+/* --- AI Assistant (Phase 9B) --- */
+
+export interface AICitation {
+  document_id: string;
+  file_name: string | null;
+  version: number | null;
+  chunk_id: string | null;
+  page_start: number | null;
+  page_end: number | null;
+  excerpt: string | null;
+  score: number | null;
+}
+
+export interface AIQueryResponse {
+  status: "answered" | "insufficient_context" | "provider_unavailable";
+  answer: string;
+  sources: AICitation[];
+  provider: string;
+}
+

@@ -11,3 +11,8 @@ desktop.ini
 # IDE
 .idea/
 .vscode/
+
+# Local dev databases (optional SQLite quick-start; regenerate with app.seed)
+*.db
+*.sqlite
+*.sqlite3

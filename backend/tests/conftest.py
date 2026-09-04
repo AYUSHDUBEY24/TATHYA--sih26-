@@ -16,15 +16,18 @@ from sqlalchemy.pool import StaticPool
 from app.db.database import Base, get_db
 from app.main import app
 from app.models.audit_log import AuditLog
+from app.models.blockchain_record import BlockchainRecord
 from app.models.case import Case
 from app.models.case_member import CaseMember
 from app.models.document import Document
+from app.models.document_chunk import DocumentChunk
+from app.models.document_text import DocumentText
 from app.models.document_version import DocumentVersion
 from app.models.user import User
 from app.seed import seed_default_data
 
 test_engine = create_engine(
-    "sqlite+pysqlite://",
+    "sqlite+pysqlite:///:memory:",
     connect_args={"check_same_thread": False},
     poolclass=StaticPool,
 )
@@ -46,7 +49,10 @@ def _clean_users(_init_db):
     yield
     db = TestSession()
     db.execute(delete(AuditLog))
+    db.execute(delete(BlockchainRecord))
     db.execute(delete(DocumentVersion))
+    db.execute(delete(DocumentChunk))
+    db.execute(delete(DocumentText))
     db.execute(delete(Document))
     db.execute(delete(CaseMember))
     db.execute(delete(Case))

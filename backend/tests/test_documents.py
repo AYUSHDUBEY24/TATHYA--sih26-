@@ -58,11 +58,11 @@ def auth(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-def make_case(client: TestClient, token: str) -> dict:
+def make_case(client: TestClient, token: str, title: str = "Doc test case") -> dict:
     response = client.post(
         CASES,
         json={
-            "title": "Doc test case",
+            "title": title,
             "crime_type": "THEFT",
             "police_station": "Central PS",
         },

@@ -8,3 +8,6 @@ bcrypt>=4.2
 pyjwt>=2.9
 python-multipart>=0.0.9
 minio>=7.2
+web3>=7.0
+# Phase 8 — document text extraction (PDF text layer + scanned-PDF page rendering)
+pymupdf>=1.24

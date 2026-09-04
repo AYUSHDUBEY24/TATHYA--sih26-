@@ -93,3 +93,45 @@ class AuditLogResponse(BaseModel):
     metadata: dict = {}
     created_at: datetime
 
+
+# --- Blockchain (Phase 7) ---
+
+class BlockchainStatus(str, Enum):
+    NOT_ANCHORED = "NOT_ANCHORED"
+    PENDING = "PENDING"
+    CONFIRMED = "CONFIRMED"
+    FAILED = "FAILED"
+    UNAVAILABLE = "UNAVAILABLE"
+
+
+class BlockchainVerifyStatus(str, Enum):
+    VERIFIED = "VERIFIED"
+    FILE_INTEGRITY_FAILURE = "FILE_INTEGRITY_FAILURE"
+    BLOCKCHAIN_MISMATCH = "BLOCKCHAIN_MISMATCH"
+    BLOCKCHAIN_UNAVAILABLE = "BLOCKCHAIN_UNAVAILABLE"
+    NOT_ANCHORED = "NOT_ANCHORED"
+
+
+class BlockchainStatusResponse(BaseModel):
+    document_id: UUID
+    version_id: UUID | None = None
+    version_number: int | None = None
+    blockchain_key: str | None = None
+    status: str
+    transaction_hash: str | None = None
+    block_number: int | None = None
+    anchored_at: datetime | None = None
+    error_message: str | None = None
+
+
+class BlockchainVerifyResponse(BaseModel):
+    status: BlockchainVerifyStatus
+    document_id: UUID
+    version: int
+    file_hash: str
+    stored_hash: str
+    blockchain_hash: str | None = None
+    blockchain_key: str | None = None
+    transaction_hash: str | None = None
+    verified_at: datetime | None = None
+

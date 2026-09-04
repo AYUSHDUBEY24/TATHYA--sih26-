@@ -8,6 +8,8 @@ import {
   DocumentItem,
   DocumentVersion,
   IntegrityResult,
+  BlockchainStatusResult,
+  BlockchainVerifyResult,
 } from "@/lib/api-types";
 
 function formatBytes(bytes: number): string {
@@ -33,6 +35,10 @@ export default function DocumentsSection({ caseId }: { caseId: string }) {
   const [verifyBusy, setVerifyBusy] = useState(false);
   const [versionBusy, setVersionBusy] = useState(false);
   const [changeNote, setChangeNote] = useState("");
+  const [bcStatus, setBcStatus] = useState<BlockchainStatusResult | null>(null);
+  const [bcVerify, setBcVerify] = useState<BlockchainVerifyResult | null>(null);
+  const [registerBusy, setRegisterBusy] = useState(false);
+  const [bcVerifyBusy, setBcVerifyBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -88,6 +94,8 @@ export default function DocumentsSection({ caseId }: { caseId: string }) {
       setSelected((prev) => (prev?.id === doc.id ? null : doc));
       setIntegrity(null);
       setHistory(null);
+      setBcStatus(null);
+      setBcVerify(null);
       apiFetch<DocumentVersion[]>(`/api/documents/${doc.id}/versions`)
         .then(setHistory)
         .catch(() => setHistory(null));
@@ -106,6 +114,50 @@ export default function DocumentsSection({ caseId }: { caseId: string }) {
       setError(err instanceof Error ? err.message : "Verification failed");
     } finally {
       setVerifyBusy(false);
+    }
+  }
+
+  async function handleRegisterBc(doc: DocumentItem) {
+    setRegisterBusy(true);
+    setError(null);
+    try {
+      const result = await apiFetch<BlockchainStatusResult>(
+        `/api/blockchain/register?document_id=${doc.id}`,
+        { method: "POST" }
+      );
+      setBcStatus(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Blockchain registration failed");
+    } finally {
+      setRegisterBusy(false);
+    }
+  }
+
+  async function handleBcVerify(doc: DocumentItem) {
+    setBcVerifyBusy(true);
+    setError(null);
+    try {
+      setBcVerify(
+        await apiFetch<BlockchainVerifyResult>(
+          `/api/blockchain/${doc.id}/verify`
+        )
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Blockchain verification failed");
+    } finally {
+      setBcVerifyBusy(false);
+    }
+  }
+
+  async function handleBcStatus(doc: DocumentItem) {
+    try {
+      setBcStatus(
+        await apiFetch<BlockchainStatusResult>(
+          `/api/blockchain/${doc.id}/status`
+        )
+      );
+    } catch {
+      setBcStatus(null);
     }
   }
 
@@ -223,14 +275,87 @@ export default function DocumentsSection({ caseId }: { caseId: string }) {
         <div className="mb-6 rounded-lg border border-slate-700 bg-slate-950/60 p-4 text-sm">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <p className="font-semibold text-slate-200">{selected.file_name}</p>
-            <button
-              onClick={() => handleVerify(selected)}
-              disabled={verifyBusy}
-              className="rounded-lg border border-sky-700 px-3 py-1 text-xs font-semibold text-sky-300 transition hover:bg-sky-950 disabled:opacity-50"
-            >
-              {verifyBusy ? "Verifying…" : "Verify integrity"}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => handleVerify(selected)}
+                disabled={verifyBusy}
+                className="rounded-lg border border-sky-700 px-3 py-1 text-xs font-semibold text-sky-300 transition hover:bg-sky-950 disabled:opacity-50">
+                {verifyBusy ? "Verifying…" : "Verify integrity"}
+              </button>
+              <button onClick={() => handleRegisterBc(selected)}
+                disabled={registerBusy}
+                className="rounded-lg border border-amber-700 px-3 py-1 text-xs font-semibold text-amber-300 transition hover:bg-amber-950 disabled:opacity-50"
+                title="Anchor this document's hash on the local blockchain">
+                {registerBusy ? "Anchoring…" : "Register on Blockchain"}
+              </button>
+              <button onClick={() => handleBcVerify(selected)}
+                disabled={bcVerifyBusy}
+                className="rounded-lg border border-violet-700 px-3 py-1 text-xs font-semibold text-violet-300 transition hover:bg-violet-950 disabled:opacity-50"
+                title="Verify file + DB + blockchain hashes">
+                {bcVerifyBusy ? "Verifying…" : "Verify Blockchain"}
+              </button>
+            </div>
           </div>
+
+          {/* Blockchain anchor status */}
+          <div className="mb-3 rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-slate-300">Blockchain Integrity</span>
+              <button onClick={() => handleBcStatus(selected)}
+                className="text-xs text-sky-400 underline">Refresh</button>
+            </div>
+            {bcStatus ? (
+              <div className="mt-1 space-y-0.5">
+                <p>Status: <span className={
+                  bcStatus.status === "CONFIRMED" ? "text-emerald-300" :
+                  bcStatus.status === "FAILED" ? "text-rose-300" :
+                  bcStatus.status === "PENDING" ? "text-amber-300" :
+                  "text-slate-400"
+                }>{bcStatus.status}</span></p>
+                {bcStatus.transaction_hash && (
+                  <p className="break-all font-mono">Tx: {bcStatus.transaction_hash}</p>
+                )}
+                {bcStatus.block_number != null && (
+                  <p>Block: {bcStatus.block_number}</p>
+                )}
+                {bcStatus.anchored_at && (
+                  <p>Anchored: {new Date(bcStatus.anchored_at).toLocaleString()}</p>
+                )}
+                {bcStatus.error_message && (
+                  <p className="text-rose-300">Error: {bcStatus.error_message}</p>
+                )}
+              </div>
+            ) : (
+              <p className="mt-1 text-slate-400">Click "Register on Blockchain" to anchor, or "Refresh" to check status.</p>
+            )}
+          </div>
+
+          {/* Blockchain verify result */}
+          {bcVerify && (
+            <div className={`mb-3 rounded-lg border px-3 py-2 text-xs ${
+              bcVerify.status === "VERIFIED"
+                ? "border-emerald-700 bg-emerald-950/40 text-emerald-300"
+                : bcVerify.status === "BLOCKCHAIN_UNAVAILABLE"
+                ? "border-amber-700 bg-amber-950/40 text-amber-300"
+                : "border-rose-700 bg-rose-950/40 text-rose-300"
+            }`}>
+              <p className="font-semibold">
+                {bcVerify.status === "VERIFIED" ? "✅ Blockchain VERIFIED" :
+                 bcVerify.status === "FILE_INTEGRITY_FAILURE" ? "🚨 File integrity failure" :
+                 bcVerify.status === "BLOCKCHAIN_MISMATCH" ? "🚨 Blockchain hash mismatch" :
+                 bcVerify.status === "BLOCKCHAIN_UNAVAILABLE" ? "⚠️ Blockchain unavailable" :
+                 "— Not anchored"}
+              </p>
+              {bcVerify.blockchain_hash && (
+                <p className="mt-1 break-all font-mono">On-chain hash: {bcVerify.blockchain_hash}</p>
+              )}
+              {bcVerify.transaction_hash && (
+                <p className="break-all font-mono">Tx: {bcVerify.transaction_hash}</p>
+              )}
+              {bcVerify.verified_at && (
+                <p>Verified: {new Date(bcVerify.verified_at).toLocaleString()}</p>
+              )}
+            </div>
+          )}
 
           {/* Integrity status */}
           {integrity && (

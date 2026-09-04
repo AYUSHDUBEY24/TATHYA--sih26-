@@ -4,6 +4,7 @@ Phase 5: immutable version history + SHA-256 integrity verification.
 """
 
 from datetime import datetime, timezone
+import logging
 from uuid import UUID
 
 from fastapi import (
@@ -57,6 +58,8 @@ router = APIRouter()
 # Top-level version routes (/api/versions/{id}[/download]) — version access is
 # always re-authorized through the version's parent document/case.
 versions_router = APIRouter()
+
+logger = logging.getLogger("sih26190.api.documents")
 
 
 def _read_and_validate_file(file: UploadFile) -> tuple[bytes, str, str]:
@@ -132,6 +135,97 @@ def _version_to_response(
         created_at=version.created_at,
         uploader=UserBrief.model_validate(uploader) if uploader else None,
     )
+def _anchor_version(
+    db: Session,
+    document: Document,
+    version: DocumentVersion,
+    *,
+    actor: User,
+    request: Request | None = None,
+) -> None:
+    """
+    Best-effort blockchain anchoring for a freshly committed document version.
+
+    Called AFTER the document/version rows are committed. Blockchain failures
+    NEVER roll back the document — the record is simply marked FAILED/PENDING
+    and the application remains fully usable.
+    """
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    if not settings.BLOCKCHAIN_ENABLED:
+        return  # blockchain disabled — skip silently
+
+    from app.models.blockchain_record import BlockchainRecord
+    from app.services.blockchain_service import (
+        BlockchainError,
+        get_blockchain_service,
+    )
+
+    blockchain_key = f"{document.id}:{version.version_number}"
+
+    record = BlockchainRecord(
+        document_version_id=version.id,
+        document_hash=version.hash,
+        blockchain_key=blockchain_key,
+        status="PENDING",
+    )
+    db.add(record)
+    try:
+        db.commit()
+        db.refresh(record)
+    except Exception:
+        # If we can't even persist the PENDING record, log and move on.
+        logger.warning("Could not persist blockchain PENDING record")
+        db.rollback()
+        return
+
+    try:
+        service = get_blockchain_service()
+        result = service.register_hash(blockchain_key, version.hash)
+    except BlockchainError as exc:
+        record.status = "FAILED"
+        record.error_message = str(exc)[:500]
+        db.commit()
+        log_audit(
+            db,
+            AuditAction.BLOCKCHAIN_REGISTRATION_FAILED,
+            actor=actor,
+            entity_type="BLOCKCHAIN",
+            entity_id=record.id,
+            case_id=document.case_id,
+            result=AuditResult.FAILURE,
+            ip_address=client_ip(request) if request else None,
+            data={"key": blockchain_key, "error": str(exc)[:500]},
+            commit=True,
+        )
+        return
+
+    # Success.
+    record.transaction_hash = result["tx_hash"]
+    record.block_number = result["block_number"]
+    record.anchored_at = result["timestamp"]
+    record.status = "CONFIRMED"
+    record.error_message = None
+    db.commit()
+    log_audit(
+        db,
+        AuditAction.BLOCKCHAIN_REGISTERED,
+        actor=actor,
+        entity_type="BLOCKCHAIN",
+        entity_id=record.id,
+        case_id=document.case_id,
+        ip_address=client_ip(request) if request else None,
+        data={
+            "key": blockchain_key,
+            "tx_hash": result["tx_hash"],
+            "block_number": result["block_number"],
+        },
+        commit=True,
+    )
+
+
+
 
 
 @router.post(
@@ -230,6 +324,15 @@ def upload_document(
 
     db.commit()
     db.refresh(document)
+
+    # Phase 7: best-effort blockchain anchoring (never rolls back the document).
+    _anchor_version(db, document, version, actor=current_user, request=request)
+
+    # Phase 8: best-effort text extraction (never rolls back the document).
+    from app.services.document_processing import process_document_version
+
+    process_document_version(db, document, version, content, actor=current_user, request=request)
+
     return _to_response(document, current_user, db)
 
 
@@ -437,6 +540,15 @@ def create_document_version(
 
     db.commit()
     db.refresh(version)
+
+    # Phase 7: best-effort blockchain anchoring (never rolls back the version).
+    _anchor_version(db, document, version, actor=current_user, request=request)
+
+    # Phase 8: best-effort text extraction for the new version.
+    from app.services.document_processing import process_document_version
+
+    process_document_version(db, document, version, content, actor=current_user, request=request)
+
     return _version_to_response(version, db)
 
 

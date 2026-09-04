@@ -44,3 +44,6 @@ class DocumentVersion(Base):
         back_populates="versions"
     )
     uploader: Mapped["User"] = relationship()  # noqa: F821
+    blockchain_record: Mapped["BlockchainRecord | None"] = relationship(  # noqa: F821
+        back_populates="document_version", uselist=False
+    )

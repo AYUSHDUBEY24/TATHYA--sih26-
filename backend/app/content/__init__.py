@@ -1,0 +1,1 @@
+"""Demo document content for the seed system (Phase 10A)."""

@@ -56,6 +56,32 @@ class Settings(BaseSettings):
     # --- Upload limits (Phase 4) ---
     MAX_UPLOAD_SIZE_MB: int = 50
 
+    # --- Blockchain (Phase 7) — local Hardhat network ONLY ---
+    # All secrets via env vars. Defaults target a local Hardhat node started
+    # with `npx hardhat node` (the well-known first account private key).
+    BLOCKCHAIN_RPC_URL: str = "http://127.0.0.1:8545"
+    BLOCKCHAIN_CHAIN_ID: int = 31337
+    BLOCKCHAIN_CONTRACT_ADDRESS: str = ""
+    BLOCKCHAIN_PRIVATE_KEY: str = (
+        "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+    )
+    # When False, blockchain anchoring is skipped entirely (docs remain usable).
+    BLOCKCHAIN_ENABLED: bool = True
+
+    # --- Embeddings / RAG (Phase 9A) ---
+    # "fallback" uses the deterministic offline embedding (no API key needed).
+    EMBEDDINGS_PROVIDER: str = "fallback"
+
+    # --- LLM / answer synthesis (Phase 9B) ---
+    # LLM_PROVIDER: "fallback" (no external calls) or "openai"/"openai-compatible"
+    # (any OpenAI-compatible /chat/completions endpoint). When no real provider
+    # is configured the assistant reports "provider unavailable" instead of
+    # fabricating answers.
+    LLM_PROVIDER: str = "fallback"
+    OPENAI_API_KEY: str | None = None
+    LLM_MODEL: str = "gpt-4o-mini"
+    LLM_API_BASE: str = "https://api.openai.com/v1"
+
 
 @lru_cache
 def get_settings() -> Settings:

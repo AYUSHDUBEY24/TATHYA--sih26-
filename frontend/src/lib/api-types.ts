@@ -44,18 +44,9 @@ export const CASE_STATUSES = [
   "ARCHIVED",
 ] as const;
 
-export function statusBadgeClass(status: string): string {
-  const map: Record<string, string> = {
-    OPEN: "bg-sky-900/80 text-sky-300",
-    UNDER_INVESTIGATION: "bg-amber-900/80 text-amber-300",
-    UNDER_REVIEW: "bg-violet-900/80 text-violet-300",
-    CHARGESHEET_FILED: "bg-orange-900/80 text-orange-300",
-    COURT_STAGE: "bg-fuchsia-900/80 text-fuchsia-300",
-    CLOSED: "bg-slate-800 text-slate-300",
-    ARCHIVED: "bg-slate-800/60 text-slate-400",
-  };
-  return `rounded-md px-2 py-0.5 text-xs font-semibold ${map[status] ?? "bg-slate-800 text-slate-300"}`;
-}
+// Status badge styling lives in `components/ui.tsx` (StatusBadge) — the
+// previous duplicate `statusBadgeClass` helper was removed during the
+// redesign; use <StatusBadge status={...} /> instead.
 
 /* --- Documents (Phase 4) --- */
 

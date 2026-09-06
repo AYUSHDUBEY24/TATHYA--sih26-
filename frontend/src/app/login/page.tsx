@@ -3,6 +3,14 @@
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { API_BASE_URL, AuthUser, saveAuth } from "@/lib/auth";
+import {
+  IconLock,
+  IconScale,
+  IconShield,
+  IconUser,
+  LogoBlock,
+  LogoMark,
+} from "@/components/icons";
 
 const ROLES = [
   "ADMIN",
@@ -11,6 +19,24 @@ const ROLES = [
   "FORENSIC_OFFICER",
   "PROSECUTOR",
 ] as const;
+
+const HIGHLIGHTS = [
+  {
+    icon: IconLock,
+    title: "Role-based access control",
+    text: "Every request is authorized server-side against your role and case assignments.",
+  },
+  {
+    icon: IconShield,
+    title: "SHA-256 + blockchain integrity",
+    text: "Document versions are hash-anchored and tamper-evident.",
+  },
+  {
+    icon: IconScale,
+    title: "Complete audit trail",
+    text: "Every document action is recorded and reviewable.",
+  },
+];
 
 export default function LoginPage() {
   const router = useRouter();
@@ -80,123 +106,171 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-8">
-      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
-        <p className="mb-1 text-xs font-medium uppercase tracking-widest text-sky-400">
-          SIH26190 · Secure Document Management System
-        </p>
-        <h1 className="mb-6 text-2xl font-bold">
-          {mode === "login" ? "Sign in" : "Create an account"}
-        </h1>
+    <main className="flex min-h-screen">
+      {/* Brand / trust panel */}
+      <div className="hidden w-[42%] flex-col justify-between bg-gradient-to-b from-[#0f172a] to-[#1e293b] p-10 lg:flex">
+        <LogoBlock size="lg" />
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="mb-1 block text-sm text-slate-400" htmlFor="email">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-sky-500"
-              placeholder="officer@example.gov.in"
-            />
+        <div>
+          <h2 className="text-3xl font-bold leading-tight text-white">
+            Secure digital document management for legal and investigation
+            workflows.
+          </h2>
+          <div className="mt-8 space-y-5">
+            {HIGHLIGHTS.map(({ icon: Icon, title, text }) => (
+              <div key={title} className="flex gap-3">
+                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10 text-blue-300">
+                  <Icon className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="text-sm font-medium text-white">{title}</p>
+                  <p className="mt-0.5 text-xs text-slate-400">{text}</p>
+                </div>
+              </div>
+            ))}
           </div>
+        </div>
 
-          {mode === "register" && (
-            <>
-              <div>
-                <label className="mb-1 block text-sm text-slate-400" htmlFor="username">
-                  Username
-                </label>
-                <input
-                  id="username"
-                  required
-                  minLength={3}
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-sky-500"
-                  placeholder="jane.officer"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-400" htmlFor="fullName">
-                  Full name (optional)
-                </label>
-                <input
-                  id="fullName"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-sky-500"
-                  placeholder="Jane Officer"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm text-slate-400" htmlFor="role">
-                  Role (prototype demo)
-                </label>
-                <select
-                  id="role"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-sky-500"
-                >
-                  {ROLES.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </>
-          )}
-
-          <div>
-            <label className="mb-1 block text-sm text-slate-400" htmlFor="password">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              required
-              minLength={mode === "register" ? 8 : 1}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-sky-500"
-              placeholder="••••••••"
-            />
-          </div>
-
-          {error && (
-            <p className="rounded-lg border border-rose-800 bg-rose-950/60 px-3 py-2 text-sm text-rose-300">
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:opacity-50"
-          >
-            {busy ? "Please wait…" : mode === "login" ? "Sign in" : "Register"}
-          </button>
-        </form>
-
-        <p className="mt-6 text-center text-sm text-slate-400">
-          {mode === "login" ? "No account yet?" : "Already registered?"}{" "}
-          <button
-            type="button"
-            onClick={() => {
-              setMode(mode === "login" ? "register" : "login");
-              setError(null);
-            }}
-            className="text-sky-400 underline"
-          >
-            {mode === "login" ? "Register" : "Sign in"}
-          </button>
+        <p className="text-[11px] text-slate-500">
+          SIH26190 · Smart India Hackathon 2026 prototype — synthetic demo data
+          only.
         </p>
+      </div>
+
+      {/* Auth form */}
+      <div className="flex flex-1 items-center justify-center bg-slate-50 p-6">
+        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-card">
+          <div className="mb-4 lg:hidden">
+            <LogoMark className="h-10 w-10" />
+          </div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-blue-600">
+            TATHYA · Secure Document Management
+          </p>
+          <h1 className="mb-6 mt-1 text-2xl font-bold text-slate-900">
+            {mode === "login" ? "Sign in to your account" : "Create an account"}
+          </h1>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="label" htmlFor="email">
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="input"
+                placeholder="officer@example.gov.in"
+              />
+            </div>
+
+            {mode === "register" && (
+              <>
+                <div>
+                  <label className="label" htmlFor="username">
+                    <span className="inline-flex items-center gap-1">
+                      <IconUser className="h-3.5 w-3.5 text-slate-400" />
+                      Username
+                    </span>
+                  </label>
+                  <input
+                    id="username"
+                    required
+                    minLength={3}
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="input"
+                    placeholder="jane.officer"
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="fullName">
+                    Full name (optional)
+                  </label>
+                  <input
+                    id="fullName"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    className="input"
+                    placeholder="Jane Officer"
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="role">
+                    Role (prototype demo)
+                  </label>
+                  <select
+                    id="role"
+                    value={role}
+                    onChange={(e) => setRole(e.target.value)}
+                    className="input"
+                  >
+                    {ROLES.map((r) => (
+                      <option key={r} value={r}>
+                        {r.replace(/_/g, " ")}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+
+            <div>
+              <label className="label" htmlFor="password">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                required
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                minLength={mode === "register" ? 8 : 1}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="input"
+                placeholder="••••••••"
+              />
+            </div>
+
+            {error && (
+              <p
+                role="alert"
+                className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
+              >
+                {error}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={busy}
+              className="btn btn-primary btn-md w-full"
+            >
+              {busy ? "Please wait…" : mode === "login" ? "Sign in" : "Register"}
+            </button>
+          </form>
+
+          <p className="mt-6 text-center text-sm text-slate-600">
+            {mode === "login" ? "No account yet?" : "Already registered?"}{" "}
+            <button
+              type="button"
+              onClick={() => {
+                setMode(mode === "login" ? "register" : "login");
+                setError(null);
+              }}
+              className="font-medium text-blue-600 underline-offset-2 hover:underline"
+            >
+              {mode === "login" ? "Register" : "Sign in"}
+            </button>
+          </p>
+          <p className="mt-4 text-center text-[11px] text-slate-400">
+            Prototype demo environment — accounts are provisioned by the backend
+            seed script.
+          </p>
+        </div>
       </div>
     </main>
   );

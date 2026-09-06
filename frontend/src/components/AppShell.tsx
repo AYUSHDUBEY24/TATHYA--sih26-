@@ -1,111 +1,157 @@
 "use client";
 
-import React, { useState, type ReactElement } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/useAuth";
+import {
+  IconHome,
+  IconFolder,
+  IconSearch,
+  IconSparkles,
+  IconClipboardList,
+  IconShield,
+  IconLogOut,
+  IconMenu,
+  LogoBlock,
+} from "./icons";
 
-const navItems = [
-  { href: "/", label: "Dashboard", icon: "home" },
-  { href: "/cases", label: "Cases", icon: "folder" },
-  { href: "/search", label: "Search", icon: "search" },
-  { href: "/ai", label: "AI Assistant", icon: "sparkles" },
-  { href: "/audit", label: "Audit Logs", icon: "clipboard" },
+/**
+ * Navigation is grouped and contains ONLY real routes:
+ * /, /cases, /search, /ai, /audit. No placeholder pages.
+ */
+const navGroups = [
+  {
+    label: "Overview",
+    items: [{ href: "/", label: "Dashboard", icon: IconHome }],
+  },
+  {
+    label: "Investigation",
+    items: [
+      { href: "/cases", label: "Cases", icon: IconFolder },
+      { href: "/search", label: "Search", icon: IconSearch },
+    ],
+  },
+  {
+    label: "Intelligence",
+    items: [{ href: "/ai", label: "AI Assistant", icon: IconSparkles }],
+  },
+  {
+    label: "Oversight",
+    items: [{ href: "/audit", label: "Audit Logs", icon: IconClipboardList }],
+  },
 ];
 
-function NavIcon({ icon }: { icon: string }) {
-  const icons: Record<string, ReactElement> = {
-    home: (
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-    ),
-    folder: (
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-    ),
-    search: (
-      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-    ),
-    sparkles: (
-      <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-    ),
-    clipboard: (
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-    ),
-  };
-  return (
-    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      {icons[icon]}
-    </svg>
-  );
+function isActive(pathname: string, href: string): boolean {
+  return pathname === href || (href !== "/" && pathname.startsWith(href));
 }
-
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // The login page renders standalone — no shell chrome while logged out.
+  if (pathname === "/login") {
+    return <>{children}</>;
+  }
+
   return (
-    <div className="flex h-screen overflow-hidden bg-muted">
+    <div className="flex h-screen overflow-hidden bg-background">
       {sidebarOpen && (
-        <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setSidebarOpen(false)} />
+        <div
+          className="fixed inset-0 z-40 bg-slate-900/50 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
       )}
-      <aside className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-[hsl(var(--sidebar-bg))] transition-transform lg:static lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="flex h-16 items-center gap-3 border-b border-white/10 px-6">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
-          </div>
-          <div>
-            <h1 className="text-sm font-bold text-white">SecureDMS</h1>
-            <p className="text-xs text-sidebar-muted">Legal & Investigation</p>
-          </div>
+
+      {/* Sidebar: Deep Navy → Slate gradient */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-gradient-to-b from-[#0f172a] to-[#1e293b] transition-transform lg:static lg:translate-x-0 ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        {/* Brand */}
+        <div className="flex h-16 items-center border-b border-white/10 px-5">
+          <LogoBlock />
         </div>
-        <nav className="flex-1 space-y-1 px-3 py-4">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
-            return (
-              <Link key={item.href} href={item.href} onClick={() => setSidebarOpen(false)} className={isActive ? "nav-link-active" : "nav-link-inactive"}>
-                <NavIcon icon={item.icon} />
-                {item.label}
-              </Link>
-            );
-          })}
+
+        {/* Grouped navigation */}
+        <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4 slim-scrollbar">
+          {navGroups.map((group) => (
+            <div key={group.label}>
+              <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+                {group.label}
+              </p>
+              <div className="space-y-0.5">
+                {group.items.map((item) => {
+                  const active = isActive(pathname, item.href);
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setSidebarOpen(false)}
+                      aria-current={active ? "page" : undefined}
+                      className={`flex items-center gap-3 rounded-lg border-l-2 px-3 py-2 text-sm font-medium transition-colors ${
+                        active
+                          ? "border-blue-500 bg-blue-500/15 text-white"
+                          : "border-transparent text-slate-400 hover:bg-white/5 hover:text-white"
+                      }`}
+                    >
+                      <Icon className="h-[18px] w-[18px]" />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
+
+        {/* User profile + sign out */}
         <div className="border-t border-white/10 p-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/20 text-sm font-medium text-white">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-sm font-semibold text-white">
               {user?.full_name?.charAt(0) || user?.username?.charAt(0) || "U"}
             </div>
-            <div className="flex-1 truncate">
-              <p className="truncate text-sm font-medium text-white">{user?.full_name || user?.username}</p>
-              <p className="truncate text-xs text-sidebar-muted">{user?.role?.name?.replace(/_/g, " ") || "User"}</p>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-white">
+                {user?.full_name || user?.username || "Not signed in"}
+              </p>
+              <p className="truncate text-[11px] text-slate-400">
+                {user?.role?.name?.replace(/_/g, " ") || "User"}
+              </p>
             </div>
           </div>
-          <button onClick={logout} className="mt-3 flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-sidebar-muted transition-colors hover:bg-sidebar-hover hover:text-white">
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
+          <button
+            onClick={logout}
+            className="mt-3 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
+          >
+            <IconLogOut className="h-4 w-4" />
             Sign out
           </button>
         </div>
       </aside>
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex h-16 items-center gap-4 border-b border-border bg-card px-6">
-          <button onClick={() => setSidebarOpen(true)} className="rounded-md p-2 text-muted-foreground hover:bg-muted lg:hidden">
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
+
+      {/* Main column */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        {/* Mobile top bar */}
+        <header className="flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 lg:px-6">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 lg:hidden"
+            aria-label="Open navigation"
+          >
+            <IconMenu className="h-5 w-5" />
           </button>
           <div className="flex-1" />
-          <span className="badge-info">
-            <svg className="mr-1 h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
+          <span className="badge badge-success">
+            <IconShield className="h-3 w-3" />
             Secure Session
           </span>
         </header>
-        <main className="flex-1 overflow-auto p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto p-6 lg:p-8">{children}</main>
       </div>
     </div>
   );

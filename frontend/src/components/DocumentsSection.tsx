@@ -11,14 +11,27 @@ import {
   BlockchainStatusResult,
   BlockchainVerifyResult,
 } from "@/lib/api-types";
+import { Button, Skeleton } from "./ui";
+import { DocumentCard, DocumentRow } from "./DocumentRow";
+import {
+  BlockchainStatusBadge,
+  IntegrityBadge,
+  VerifiedAt,
+} from "./IntegrityBadge";
+import { Modal } from "./Modal";
+import { useToast } from "./Toast";
+import { IconAlertTriangle, IconFileText, IconShield } from "./icons";
+import { copyText, formatBytes, formatDateTime, shortHash } from "@/lib/format";
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
+/**
+ * Case documents & evidence section.
+ *
+ * ALL API handlers (upload, download, delete, new version, integrity
+ * verification, blockchain register/verify/status) are preserved from the
+ * original implementation with identical request/response contracts.
+ */
 export default function DocumentsSection({ caseId }: { caseId: string }) {
+  const { toast } = useToast();
   const [docs, setDocs] = useState<DocumentItem[] | null>(null);
   const [selected, setSelected] = useState<DocumentItem | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +52,8 @@ export default function DocumentsSection({ caseId }: { caseId: string }) {
   const [bcVerify, setBcVerify] = useState<BlockchainVerifyResult | null>(null);
   const [registerBusy, setRegisterBusy] = useState(false);
   const [bcVerifyBusy, setBcVerifyBusy] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<DocumentItem | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -69,10 +84,23 @@ export default function DocumentsSection({ caseId }: { caseId: string }) {
       formData.append("document_type", uploadForm.document_type);
       formData.append("classification", uploadForm.classification);
       formData.append("description", uploadForm.description);
-      await apiUpload<DocumentItem>("/api/documents/upload", formData);
+      // The upload endpoint returns the created document — use it to surface
+      // the new document immediately (list refresh + detail panel selection).
+      const created = await apiUpload<DocumentItem>(
+        "/api/documents/upload",
+        formData
+      );
       if (fileInputRef.current) fileInputRef.current.value = "";
       setUploadForm((f) => ({ ...f, description: "" }));
+      toast({
+        title: "Document uploaded",
+        description: "SHA-256 recorded and audit event created.",
+        variant: "success",
+      });
       await load();
+      if (created?.id) {
+        selectDoc(created);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -180,6 +208,7 @@ export default function DocumentsSection({ caseId }: { caseId: string }) {
       setChangeNote("");
       await load();
       selectDoc({ ...selected, current_version_number: (selected.current_version_number ?? 0) + 1 });
+      toast({ title: "New version uploaded", variant: "success" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Version upload failed");
     } finally {
@@ -187,321 +216,612 @@ export default function DocumentsSection({ caseId }: { caseId: string }) {
     }
   }
 
-  async function handleDelete(doc: DocumentItem) {
+  // Delete is only performed after explicit confirmation in the modal.
+  async function performDelete(doc: DocumentItem) {
+    setDeleteBusy(true);
     setError(null);
     try {
       await apiFetch(`/api/documents/${doc.id}`, { method: "DELETE" });
       if (selected?.id === doc.id) setSelected(null);
+      setDeleteTarget(null);
+      toast({ title: "Document deleted", variant: "success" });
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setDeleteBusy(false);
     }
   }
 
-  const inputClass =
-    "w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-sky-500";
-
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900 p-6">
-      <h2 className="mb-4 text-lg font-semibold">Documents</h2>
+    <section className="space-y-4">
+      <div className="flex items-center gap-2">
+        <IconFileText className="h-5 w-5 text-slate-500" />
+        <h2 className="text-lg font-semibold text-slate-900">
+          Documents &amp; Evidence
+        </h2>
+      </div>
 
       {error && (
-        <p className="mb-4 rounded-lg border border-rose-800 bg-rose-950/60 px-3 py-2 text-sm text-rose-300">
+        <div
+          role="alert"
+          className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
+        >
           {error}
-        </p>
-      )}
-
-      {docs && docs.length === 0 && (
-        <p className="mb-4 text-sm text-slate-400">
-          No documents uploaded to this case yet.
-        </p>
-      )}
-
-      {docs && docs.length > 0 && (
-        <div className="mb-6 overflow-x-auto rounded-lg border border-slate-800">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-800 text-xs uppercase tracking-wide text-slate-400">
-              <tr>
-                <th className="px-3 py-2">File</th>
-                <th className="px-3 py-2">Type</th>
-                <th className="px-3 py-2">Classification</th>
-                <th className="px-3 py-2">Uploaded by</th>
-                <th className="px-3 py-2">Date</th>
-                <th className="px-3 py-2">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {docs.map((doc) => (
-                <tr key={doc.id} className="border-b border-slate-800/60">
-                  <td className="px-3 py-2">
-                    <button
-                      onClick={() => selectDoc(doc)}
-                      className="text-sky-400 underline"
-                    >
-                      {doc.file_name}
-                    </button>
-                  </td>
-                  <td className="px-3 py-2 text-slate-400">{doc.document_type}</td>
-                  <td className="px-3 py-2">
-                    <span className="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
-                      {doc.classification}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-slate-400">
-                    {doc.uploader ? (doc.uploader.full_name ?? doc.uploader.username) : "—"}
-                  </td>
-                  <td className="px-3 py-2 text-slate-400">
-                    {new Date(doc.created_at).toLocaleDateString()}
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex gap-2">
-                      <button onClick={() => handleDownload(doc)}
-                        className="text-xs text-sky-400 underline">Download</button>
-                      {doc.can_delete && (
-                        <button onClick={() => handleDelete(doc)}
-                          className="text-xs text-rose-400 underline">Delete</button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       )}
 
-      {/* Document detail (selected): version + integrity + history */}
-      {selected && (
-        <div className="mb-6 rounded-lg border border-slate-700 bg-slate-950/60 p-4 text-sm">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <p className="font-semibold text-slate-200">{selected.file_name}</p>
-            <div className="flex flex-wrap gap-2">
-              <button onClick={() => handleVerify(selected)}
-                disabled={verifyBusy}
-                className="rounded-lg border border-sky-700 px-3 py-1 text-xs font-semibold text-sky-300 transition hover:bg-sky-950 disabled:opacity-50">
-                {verifyBusy ? "Verifying…" : "Verify integrity"}
-              </button>
-              <button onClick={() => handleRegisterBc(selected)}
-                disabled={registerBusy}
-                className="rounded-lg border border-amber-700 px-3 py-1 text-xs font-semibold text-amber-300 transition hover:bg-amber-950 disabled:opacity-50"
-                title="Anchor this document's hash on the local blockchain">
-                {registerBusy ? "Anchoring…" : "Register on Blockchain"}
-              </button>
-              <button onClick={() => handleBcVerify(selected)}
-                disabled={bcVerifyBusy}
-                className="rounded-lg border border-violet-700 px-3 py-1 text-xs font-semibold text-violet-300 transition hover:bg-violet-950 disabled:opacity-50"
-                title="Verify file + DB + blockchain hashes">
-                {bcVerifyBusy ? "Verifying…" : "Verify Blockchain"}
-              </button>
+      <div className="grid gap-4 xl:grid-cols-5">
+        {/* LEFT: document list + preview + upload */}
+        <div className="space-y-4 xl:col-span-3">
+          <div className="card overflow-hidden">
+            <div className="border-b border-slate-100 px-5 py-3">
+              <h3 className="text-sm font-semibold text-slate-900">
+                Case documents {docs ? `(${docs.length})` : ""}
+              </h3>
             </div>
-          </div>
-
-          {/* Blockchain anchor status */}
-          <div className="mb-3 rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-slate-300">Blockchain Integrity</span>
-              <button onClick={() => handleBcStatus(selected)}
-                className="text-xs text-sky-400 underline">Refresh</button>
-            </div>
-            {bcStatus ? (
-              <div className="mt-1 space-y-0.5">
-                <p>Status: <span className={
-                  bcStatus.status === "CONFIRMED" ? "text-emerald-300" :
-                  bcStatus.status === "FAILED" ? "text-rose-300" :
-                  bcStatus.status === "PENDING" ? "text-amber-300" :
-                  "text-slate-400"
-                }>{bcStatus.status}</span></p>
-                {bcStatus.transaction_hash && (
-                  <p className="break-all font-mono">Tx: {bcStatus.transaction_hash}</p>
-                )}
-                {bcStatus.block_number != null && (
-                  <p>Block: {bcStatus.block_number}</p>
-                )}
-                {bcStatus.anchored_at && (
-                  <p>Anchored: {new Date(bcStatus.anchored_at).toLocaleString()}</p>
-                )}
-                {bcStatus.error_message && (
-                  <p className="text-rose-300">Error: {bcStatus.error_message}</p>
-                )}
+            {docs === null ? (
+              <div className="space-y-3 p-4">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-12 w-full" />
+                ))}
               </div>
+            ) : docs.length === 0 ? (
+              <p className="px-5 py-6 text-sm text-slate-500">
+                No documents uploaded to this case yet.
+              </p>
             ) : (
-              <p className="mt-1 text-slate-400">Click "Register on Blockchain" to anchor, or "Refresh" to check status.</p>
+              <>
+                {/* Desktop: compact table */}
+                <div className="hidden overflow-x-auto md:block">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>File</th>
+                        <th>Type</th>
+                        <th>Classification</th>
+                        <th>Uploaded by</th>
+                        <th>Date</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {docs.map((doc) => (
+                        <DocumentRow
+                          key={doc.id}
+                          doc={doc}
+                          selected={selected?.id === doc.id}
+                          onSelect={() => selectDoc(doc)}
+                          onDownload={() => handleDownload(doc)}
+                          onDelete={
+                            doc.can_delete ? () => setDeleteTarget(doc) : undefined
+                          }
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Mobile: card list (no forced horizontal scroll) */}
+                <ul className="divide-y divide-slate-100 md:hidden">
+                  {docs.map((doc) => (
+                    <li key={doc.id}>
+                      <DocumentCard
+                        doc={doc}
+                        selected={selected?.id === doc.id}
+                        onSelect={() => selectDoc(doc)}
+                        onDownload={() => handleDownload(doc)}
+                        onDelete={
+                          doc.can_delete ? () => setDeleteTarget(doc) : undefined
+                        }
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
           </div>
 
-          {/* Blockchain verify result */}
-          {bcVerify && (
-            <div className={`mb-3 rounded-lg border px-3 py-2 text-xs ${
-              bcVerify.status === "VERIFIED"
-                ? "border-emerald-700 bg-emerald-950/40 text-emerald-300"
-                : bcVerify.status === "BLOCKCHAIN_UNAVAILABLE"
-                ? "border-amber-700 bg-amber-950/40 text-amber-300"
-                : "border-rose-700 bg-rose-950/40 text-rose-300"
-            }`}>
-              <p className="font-semibold">
-                {bcVerify.status === "VERIFIED" ? "✅ Blockchain VERIFIED" :
-                 bcVerify.status === "FILE_INTEGRITY_FAILURE" ? "🚨 File integrity failure" :
-                 bcVerify.status === "BLOCKCHAIN_MISMATCH" ? "🚨 Blockchain hash mismatch" :
-                 bcVerify.status === "BLOCKCHAIN_UNAVAILABLE" ? "⚠️ Blockchain unavailable" :
-                 "— Not anchored"}
-              </p>
-              {bcVerify.blockchain_hash && (
-                <p className="mt-1 break-all font-mono">On-chain hash: {bcVerify.blockchain_hash}</p>
-              )}
-              {bcVerify.transaction_hash && (
-                <p className="break-all font-mono">Tx: {bcVerify.transaction_hash}</p>
-              )}
-              {bcVerify.verified_at && (
-                <p>Verified: {new Date(bcVerify.verified_at).toLocaleString()}</p>
-              )}
-            </div>
-          )}
-
-          {/* Integrity status */}
-          {integrity && (
-            <div
-              className={`mb-3 rounded-lg border px-3 py-2 ${
-                integrity.status === "VERIFIED"
-                  ? "border-emerald-700 bg-emerald-950/40 text-emerald-300"
-                  : "border-rose-700 bg-rose-950/40 text-rose-300"
-              }`}
-            >
-              <p className="font-semibold">
-                {integrity.status === "VERIFIED"
-                  ? "✅ Integrity VERIFIED"
-                  : "🚨 INTEGRITY FAILURE"}
-                {" "}(v{integrity.version})
-              </p>
-              <p className="mt-1 break-all font-mono text-xs">
-                Stored hash: {integrity.stored_hash}
-              </p>
-              <p className="break-all font-mono text-xs">
-                Current hash: {integrity.current_hash}
+          {/* Upload form */}
+          <form onSubmit={handleUpload} className="card space-y-3 p-5">
+            <div>
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                <IconFileText className="h-4 w-4 text-slate-500" />
+                Tathya Ingest — Secure Document Entry
+              </h3>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Uploaded files are stored securely, hashed with SHA-256 and
+                recorded in the audit trail.
               </p>
             </div>
-          )}
-
-          <dl className="grid grid-cols-[9rem_1fr] gap-y-1">
-            <dt className="text-slate-400">Current version</dt>
-            <dd>v{selected.current_version_number ?? "—"}</dd>
-            <dt className="text-slate-400">Current hash</dt>
-            <dd className="break-all font-mono text-xs">
-              {selected.current_hash ?? "—"}
-            </dd>
-            <dt className="text-slate-400">Status</dt>
-            <dd>{selected.status}</dd>
-            <dt className="text-slate-400">Size</dt>
-            <dd>{formatBytes(selected.size_bytes)}</dd>
-            <dt className="text-slate-400">Description</dt>
-            <dd className="text-slate-300">{selected.description ?? "—"}</dd>
-          </dl>
-
-          {/* Version history */}
-          <p className="mt-4 mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Version history
-          </p>
-          {history && history.length > 0 && (
-            <ul className="mb-3 space-y-1">
-              {history.map((v) => (
-                <li
-                  key={v.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-800 bg-slate-900/60 px-3 py-1.5"
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="label" htmlFor="upload-type">Document type</label>
+                <select
+                  id="upload-type"
+                  value={uploadForm.document_type}
+                  onChange={(e) =>
+                    setUploadForm({ ...uploadForm, document_type: e.target.value })
+                  }
+                  className="input"
                 >
-                  <span>
-                    <span className="font-semibold text-slate-200">v{v.version_number}</span>{" "}
-                    — uploaded by {v.uploader ? (v.uploader.full_name ?? v.uploader.username) : "—"}{" "}
-                    · {new Date(v.created_at).toLocaleDateString()}
-                    {v.change_note && (
-                      <span className="text-slate-400"> · {v.change_note}</span>
-                    )}
-                  </span>
-                  <button
-                    onClick={() => apiDownload(`/api/versions/${v.id}/download`, v.file_name)}
-                    className="text-xs text-sky-400 underline"
-                  >
-                    Download
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {/* Upload new version */}
-          <form onSubmit={handleNewVersion} className="mt-3 flex flex-wrap gap-2 border-t border-slate-800 pt-3">
-            <input ref={versionInputRef} type="file" required className="flex-1 text-xs text-slate-300" />
-            <input
-              value={changeNote}
-              onChange={(e) => setChangeNote(e.target.value)}
-              placeholder="Change note (optional)"
-              className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-sky-500"
-            />
-            <button
-              type="submit"
-              disabled={versionBusy}
-              className="rounded-lg bg-sky-600 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-500 disabled:opacity-50"
-            >
-              {versionBusy ? "Uploading…" : "Upload new version"}
+                  {DOCUMENT_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t.replace(/_/g, " ")}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label" htmlFor="upload-class">Classification</label>
+                <select
+                  id="upload-class"
+                  value={uploadForm.classification}
+                  onChange={(e) =>
+                    setUploadForm({ ...uploadForm, classification: e.target.value })
+                  }
+                  className="input"
+                >
+                  {CLASSIFICATIONS.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="label" htmlFor="upload-file">
+                File (PDF/image/document, max 50 MB)
+              </label>
+              <input
+                ref={fileInputRef}
+                id="upload-file"
+                type="file"
+                required
+                className="input file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-blue-700"
+              />
+            </div>
+            <div>
+              <label className="label" htmlFor="upload-desc">Description (optional)</label>
+              <input
+                id="upload-desc"
+                value={uploadForm.description}
+                onChange={(e) =>
+                  setUploadForm({ ...uploadForm, description: e.target.value })
+                }
+                className="input"
+                placeholder="Short description…"
+              />
+            </div>
+            <button type="submit" disabled={busy} className="btn btn-primary btn-md">
+              {busy ? "Uploading…" : "Upload document"}
             </button>
           </form>
         </div>
-      )}
 
-      {/* Upload form */}
-      <form onSubmit={handleUpload} className="space-y-3 border-t border-slate-800 pt-4">
-        <p className="text-sm font-medium text-slate-300">Upload document</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-xs text-slate-400">Document type</label>
-            <select
-              value={uploadForm.document_type}
-              onChange={(e) =>
-                setUploadForm({ ...uploadForm, document_type: e.target.value })
-              }
-              className={inputClass}
+        {/* RIGHT: selected document detail — metadata, integrity, versions, blockchain */}
+        <div className="xl:col-span-2">
+          {selected ? (
+            <div className="card space-y-5 p-5 xl:sticky xl:top-6">
+              {/* Document summary */}
+              <div>
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                    <IconFileText className="h-5 w-5" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="break-words text-sm font-semibold text-slate-900">
+                      {selected.file_name}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {formatBytes(selected.size_bytes)} ·{" "}
+                      {selected.content_type || "unknown type"}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleDownload(selected)}
+                  className="btn btn-secondary btn-sm mt-3 w-full"
+                >
+                  Download to view
+                </button>
+              </div>
+
+              {/* Metadata */}
+              <dl className="grid grid-cols-[8rem_1fr] gap-y-1.5 text-xs">
+                <dt className="text-slate-500">Document type</dt>
+                <dd className="text-slate-900">{selected.document_type.replace(/_/g, " ")}</dd>
+                <dt className="text-slate-500">Classification</dt>
+                <dd><span className="badge badge-muted">{selected.classification}</span></dd>
+                <dt className="text-slate-500">Status</dt>
+                <dd className="text-slate-900">{selected.status}</dd>
+                <dt className="text-slate-500">Current version</dt>
+                <dd className="text-slate-900">v{selected.current_version_number ?? "—"}</dd>
+                <dt className="text-slate-500">Uploaded by</dt>
+                <dd className="text-slate-900">
+                  {selected.uploader
+                    ? (selected.uploader.full_name ?? selected.uploader.username)
+                    : "—"}
+                </dd>
+                <dt className="text-slate-500">Created</dt>
+                <dd className="text-slate-900">{formatDateTime(selected.created_at)}</dd>
+                <dt className="text-slate-500">Updated</dt>
+                <dd className="text-slate-900">{formatDateTime(selected.updated_at)}</dd>
+                <dt className="text-slate-500">Description</dt>
+                <dd className="text-slate-700">{selected.description ?? "—"}</dd>
+              </dl>
+
+              {/* SHA-256 */}
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-slate-700">SHA-256 hash</p>
+                  {selected.current_hash && (
+                    <button
+                      onClick={async () => {
+                        const ok = await copyText(selected.current_hash!);
+                        toast({
+                          title: ok ? "Hash copied to clipboard" : "Copy failed",
+                          variant: ok ? "success" : "error",
+                        });
+                      }}
+                      className="text-xs font-medium text-blue-600 hover:underline"
+                    >
+                      Copy
+                    </button>
+                  )}
+                </div>
+                <p className="mt-1 break-all font-mono text-[11px] text-slate-700">
+                  {selected.current_hash ?? "—"}
+                </p>
+              </div>
+
+              {/* Integrity verification */}
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-slate-700">
+                    Tathya Verify — Integrity Check
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => handleVerify(selected)}
+                    disabled={verifyBusy}
+                  >
+                    {verifyBusy ? "Verifying…" : "Verify integrity"}
+                  </Button>
+                </div>
+                <div className="mt-2">
+                  <IntegrityBadge
+                    status={integrity?.status ?? null}
+                    verifiedAt={integrity?.verified_at}
+                  />
+                </div>
+
+                {/* Prominent tamper alert — only shown when the real
+                    verification API reports a hash mismatch. */}
+                {integrity?.status === "INTEGRITY_FAILURE" && (
+                  <div
+                    role="alert"
+                    className="mt-2 rounded-lg border-2 border-rose-300 bg-rose-50 p-3"
+                  >
+                    <p className="flex items-center gap-1.5 text-sm font-bold text-rose-700">
+                      <IconAlertTriangle className="h-4 w-4" />
+                      INTEGRITY FAILURE — POSSIBLE TAMPERING
+                    </p>
+                    <p className="mt-1 text-[11px] text-rose-700">
+                      The file content no longer matches the recorded hash. The
+                      result has been written to the audit trail.
+                    </p>
+                    <div className="mt-2 space-y-1 text-[11px]">
+                      <p className="text-slate-700">
+                        <span className="font-semibold">Expected hash:</span>{" "}
+                        <span className="break-all font-mono">
+                          {integrity.stored_hash}
+                        </span>
+                      </p>
+                      <p className="text-slate-700">
+                        <span className="font-semibold">Actual hash:</span>{" "}
+                        <span className="break-all font-mono">
+                          {integrity.current_hash}
+                        </span>
+                      </p>
+                    </div>
+                    <VerifiedAt at={integrity.verified_at} />
+                  </div>
+                )}
+
+                {integrity && integrity.status !== "INTEGRITY_FAILURE" && (
+                  <div className="mt-2 rounded-lg border border-slate-200 bg-white p-3 text-[11px]">
+                    <p className="font-semibold text-slate-800">
+                      Version v{integrity.version} ·{" "}
+                      {integrity.status === "VERIFIED"
+                        ? "hash matches recorded SHA-256"
+                        : integrity.status}
+                    </p>
+                    <p className="mt-1 break-all font-mono text-slate-600">
+                      Stored: {integrity.stored_hash}
+                    </p>
+                    <p className="break-all font-mono text-slate-600">
+                      Current: {integrity.current_hash}
+                    </p>
+                    <VerifiedAt at={integrity.verified_at} />
+                  </div>
+                )}
+              </div>
+
+              {/* Blockchain anchoring */}
+              <div className="rounded-lg border border-slate-200 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                    <IconShield className="h-3.5 w-3.5 text-violet-600" />
+                    Blockchain anchoring
+                  </p>
+                  <button
+                    onClick={() => handleBcStatus(selected)}
+                    className="text-xs font-medium text-blue-600 hover:underline"
+                  >
+                    Refresh
+                  </button>
+                </div>
+                <div className="mt-2">
+                  <BlockchainStatusBadge status={bcStatus?.status ?? null} />
+                </div>
+                {bcStatus ? (
+                  <div className="mt-2 space-y-0.5 text-[11px] text-slate-600">
+                    {bcStatus.blockchain_key && (
+                      <p className="break-all font-mono">
+                        Key: {shortHash(bcStatus.blockchain_key, 14, 6)}
+                      </p>
+                    )}
+                    {bcStatus.transaction_hash && (
+                      <p className="break-all font-mono">
+                        Tx: {shortHash(bcStatus.transaction_hash, 14, 6)}
+                      </p>
+                    )}
+                    {bcStatus.block_number != null && (
+                      <p>Block: {bcStatus.block_number}</p>
+                    )}
+                    {bcStatus.anchored_at && (
+                      <p>Anchored: {formatDateTime(bcStatus.anchored_at)}</p>
+                    )}
+                    {bcStatus.error_message && (
+                      <p className="text-rose-600">Error: {bcStatus.error_message}</p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="mt-1.5 text-[11px] text-slate-500">
+                    Anchor this version&apos;s hash on the local blockchain, or
+                    refresh to check anchor status.
+                  </p>
+                )}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => handleRegisterBc(selected)}
+                    disabled={registerBusy}
+                    title="Anchor this document's hash on the local blockchain"
+                  >
+                    {registerBusy ? "Anchoring…" : "Register hash"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => handleBcVerify(selected)}
+                    disabled={bcVerifyBusy}
+                    title="Verify file + DB + blockchain hashes"
+                  >
+                    {bcVerifyBusy ? "Verifying…" : "Verify blockchain"}
+                  </Button>
+                </div>
+                {bcVerify && (
+                  <div
+                    className={`mt-2 rounded-lg border p-2.5 text-[11px] ${
+                      bcVerify.status === "VERIFIED"
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                        : bcVerify.status === "BLOCKCHAIN_UNAVAILABLE"
+                        ? "border-amber-200 bg-amber-50 text-amber-800"
+                        : "border-rose-200 bg-rose-50 text-rose-800"
+                    }`}
+                  >
+                    <p className="font-semibold">
+                      {bcVerify.status === "VERIFIED"
+                        ? "Blockchain VERIFIED"
+                        : bcVerify.status === "FILE_INTEGRITY_FAILURE"
+                        ? "File integrity failure"
+                        : bcVerify.status === "BLOCKCHAIN_MISMATCH"
+                        ? "Blockchain hash mismatch"
+                        : bcVerify.status === "BLOCKCHAIN_UNAVAILABLE"
+                        ? "Blockchain unavailable"
+                        : "Not anchored"}
+                    </p>
+                    {bcVerify.blockchain_hash && (
+                      <p className="mt-1 break-all font-mono">
+                        On-chain: {shortHash(bcVerify.blockchain_hash, 14, 6)}
+                      </p>
+                    )}
+                    {bcVerify.transaction_hash && (
+                      <p className="break-all font-mono">
+                        Tx: {shortHash(bcVerify.transaction_hash, 14, 6)}
+                      </p>
+                    )}
+                    {bcVerify.verified_at && (
+                      <p>Verified: {formatDateTime(bcVerify.verified_at)}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Version history — makes explicit that originals are never
+                  overwritten: each version is stored separately. */}
+              <div>
+                <p className="text-xs font-semibold text-slate-700">Version history</p>
+                <p className="mt-0.5 text-[10px] italic text-slate-500">
+                  Original version preserved. New versions are stored separately.
+                </p>
+                {history === null ? (
+                  <div className="mt-2 space-y-2">
+                    <Skeleton className="h-8 w-full" />
+                    <Skeleton className="h-8 w-full" />
+                  </div>
+                ) : history.length === 0 ? (
+                  <p className="mt-1.5 text-[11px] text-slate-500">
+                    No versions recorded yet.
+                  </p>
+                ) : (
+                  (() => {
+                    const originalVersion = Math.min(
+                      ...history.map((v) => v.version_number)
+                    );
+                    const currentVersion = Math.max(
+                      ...history.map((v) => v.version_number)
+                    );
+                    return (
+                      <ul className="mt-2 space-y-1.5">
+                        {history.map((v) => {
+                          const isOriginal = v.version_number === originalVersion;
+                          const isCurrent = v.version_number === currentVersion;
+                          return (
+                            <li
+                              key={v.id}
+                              className={`rounded-lg border px-3 py-2 text-xs ${
+                                isCurrent
+                                  ? "border-blue-200 bg-blue-50/50"
+                                  : "border-slate-200 bg-white"
+                              }`}
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="flex flex-wrap items-center gap-1.5">
+                                  <span className="font-semibold text-slate-900">
+                                    v{v.version_number}
+                                  </span>
+                                  {isCurrent && (
+                                    <span className="badge bg-blue-100 text-[10px] text-blue-700">
+                                      CURRENT
+                                    </span>
+                                  )}
+                                  {isOriginal && (
+                                    <span className="badge badge-muted text-[10px]">
+                                      ORIGINAL
+                                    </span>
+                                  )}
+                                </span>
+                                <button
+                                  onClick={() =>
+                                    apiDownload(
+                                      `/api/versions/${v.id}/download`,
+                                      v.file_name
+                                    )
+                                  }
+                                  className="text-xs font-medium text-blue-600 hover:underline"
+                                >
+                                  Download
+                                </button>
+                              </div>
+                              <p className="mt-0.5 text-[11px] text-slate-500">
+                                uploaded by{" "}
+                                {v.uploader
+                                  ? (v.uploader.full_name ?? v.uploader.username)
+                                  : "—"}{" "}
+                                · {formatDateTime(v.created_at)}
+                              </p>
+                              {v.change_note && (
+                                <p className="truncate text-[11px] text-slate-500">
+                                  {v.change_note}
+                                </p>
+                              )}
+                              <p
+                                title={v.hash}
+                                className="mt-0.5 break-all font-mono text-[10px] text-slate-400"
+                              >
+                                SHA-256: {shortHash(v.hash)}
+                              </p>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    );
+                  })()
+                )}
+              </div>
+
+              {/* Upload new version */}
+              <form
+                onSubmit={handleNewVersion}
+                className="space-y-2 border-t border-slate-100 pt-4"
+              >
+                <p className="text-xs font-semibold text-slate-700">
+                  Upload new version
+                </p>
+                <input
+                  ref={versionInputRef}
+                  type="file"
+                  required
+                  className="input file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-blue-700"
+                />
+                <input
+                  value={changeNote}
+                  onChange={(e) => setChangeNote(e.target.value)}
+                  placeholder="Change note (optional)"
+                  className="input"
+                />
+                <button
+                  type="submit"
+                  disabled={versionBusy}
+                  className="btn btn-primary btn-sm w-full"
+                >
+                  {versionBusy ? "Uploading…" : "Upload new version"}
+                </button>
+              </form>
+            </div>
+          ) : (
+            <div className="card flex h-full flex-col items-center justify-center p-8 text-center">
+              <IconFileText className="h-8 w-8 text-slate-300" />
+              <p className="mt-3 text-sm font-medium text-slate-700">
+                Select a document
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                View metadata, SHA-256 hash, integrity verification, version
+                history and blockchain anchoring status.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Delete confirmation modal */}
+      <Modal
+        open={deleteTarget !== null}
+        onClose={() => (deleteBusy ? undefined : setDeleteTarget(null))}
+        title="Delete document?"
+        description="This action cannot be undone from the interface."
+        footer={
+          <>
+            <button
+              onClick={() => setDeleteTarget(null)}
+              disabled={deleteBusy}
+              className="btn btn-secondary btn-md"
             >
-              {DOCUMENT_TYPES.map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs text-slate-400">Classification</label>
-            <select
-              value={uploadForm.classification}
-              onChange={(e) =>
-                setUploadForm({ ...uploadForm, classification: e.target.value })
-              }
-              className={inputClass}
+              Cancel
+            </button>
+            <button
+              onClick={() => deleteTarget && performDelete(deleteTarget)}
+              disabled={deleteBusy}
+              className="btn btn-destructive btn-md"
             >
-              {CLASSIFICATIONS.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <div>
-          <label className="mb-1 block text-xs text-slate-400">
-            File (PDF/image/document, max 50 MB)
-          </label>
-          <input ref={fileInputRef} type="file" required className={inputClass} />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs text-slate-400">Description (optional)</label>
-          <input
-            value={uploadForm.description}
-            onChange={(e) => setUploadForm({ ...uploadForm, description: e.target.value })}
-            className={inputClass}
-            placeholder="Short description…"
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={busy}
-          className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:opacity-50"
-        >
-          {busy ? "Uploading…" : "Upload"}
-        </button>
-      </form>
-    </div>
+              {deleteBusy ? "Deleting…" : "Delete permanently"}
+            </button>
+          </>
+        }
+      >
+        {deleteTarget && (
+          <p>
+            <span className="font-medium text-slate-900">{deleteTarget.file_name}</span>{" "}
+            will be removed from case records. All actions are recorded in the
+            audit trail.
+          </p>
+        )}
+      </Modal>
+    </section>
   );
 }

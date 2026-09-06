@@ -1,112 +1,192 @@
-import Link from 'next/link';
-import { AuditLogEntry, CaseListItem } from '@/lib/api-types';
+import Link from "next/link";
+import { AuditLogEntry, CASE_STATUSES } from "@/lib/api-types";
+import { actionBadgeClass, formatDateTime } from "@/lib/format";
+import { IconLock } from "./icons";
 
-export function KpiCard({ label, value, tone }: { label: string; value: number; tone: 'sky' | 'amber' | 'emerald' | 'violet' }) {
-  const tones = {
-    sky: 'border-sky-900 bg-sky-950/30 text-sky-400',
-    amber: 'border-amber-900 bg-amber-950/30 text-amber-400',
-    emerald: 'border-emerald-900 bg-emerald-950/30 text-emerald-400',
-    violet: 'border-violet-900 bg-violet-950/30 text-violet-400',
-  };
+/**
+ * Dashboard building blocks. All values passed in are derived from real
+ * backend API responses — this module never invents numbers.
+ */
+
+const KPI_TONES: Record<string, { bg: string; color: string }> = {
+  blue: { bg: "bg-blue-50", color: "text-blue-600" },
+  emerald: { bg: "bg-emerald-50", color: "text-emerald-600" },
+  amber: { bg: "bg-amber-50", color: "text-amber-600" },
+  rose: { bg: "bg-rose-50", color: "text-rose-600" },
+  slate: { bg: "bg-slate-100", color: "text-slate-600" },
+};
+
+export function KpiCard({
+  label,
+  value,
+  tone = "blue",
+  icon,
+  hint,
+}: {
+  label: string;
+  value: number | string;
+  tone?: keyof typeof KPI_TONES;
+  icon?: React.ReactNode;
+  hint?: string;
+}) {
+  const toneStyle = KPI_TONES[tone] ?? KPI_TONES.blue;
   return (
-    <div className={`rounded-xl border p-5 ${tones[tone]}`}>
-      <p className='text-xs font-medium uppercase tracking-wide opacity-80'>{label}</p>
-      <p className='mt-2 text-3xl font-bold'>{value}</p>
+    <div className="card p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+            {label}
+          </p>
+          <p className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
+            {value}
+          </p>
+          {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+        </div>
+        {icon && (
+          <span
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${toneStyle.bg} ${toneStyle.color}`}
+          >
+            {icon}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
 
-export function CasesTable({ cases }: { cases: CaseListItem[] }) {
+const STATUS_BAR_COLORS: Record<string, string> = {
+  OPEN: "bg-blue-500",
+  UNDER_INVESTIGATION: "bg-amber-500",
+  UNDER_REVIEW: "bg-violet-500",
+  CHARGESHEET_FILED: "bg-orange-500",
+  COURT_STAGE: "bg-fuchsia-500",
+  CLOSED: "bg-slate-400",
+  ARCHIVED: "bg-slate-300",
+};
+
+/** Case status visualization derived from actual /api/cases data. */
+export function StatusBreakdown({
+  counts,
+  total,
+}: {
+  counts: Record<string, number>;
+  total: number;
+}) {
+  const present = CASE_STATUSES.filter((s) => (counts[s] ?? 0) > 0);
   return (
     <section>
-      <div className='mb-4 flex items-center justify-between'>
-        <h2 className='text-lg font-semibold'>Recent Cases</h2>
-        <Link href='/cases' className='text-sm font-medium text-sky-400 hover:text-sky-300'>
-          View all →
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-base font-semibold text-slate-900">Case Status</h2>
+        <Link href="/cases" className="text-sm font-medium text-blue-600 hover:underline">
+          View all cases →
         </Link>
       </div>
-      {cases.length === 0 ? (
-        <div className='rounded-xl border border-dashed border-slate-700 p-8 text-center text-slate-500'>
-          No cases yet. <Link href='/cases/new' className='text-sky-400 hover:underline'>Create your first case</Link>.
-        </div>
-      ) : (
-        <div className='overflow-hidden rounded-xl border border-slate-800'>
-          <table className='w-full text-left text-sm'>
-            <thead className='bg-slate-900 text-xs uppercase tracking-wide text-slate-400'>
-              <tr>
-                <th className='px-4 py-3'>Case</th>
-                <th className='px-4 py-3'>Status</th>
-                <th className='px-4 py-3'>Assigned IO</th>
-                <th className='px-4 py-3'>Updated</th>
-              </tr>
-            </thead>
-            <tbody className='divide-y divide-slate-800'>
-              {cases.map((c) => (
-                <tr key={c.id} className='hover:bg-slate-900/50'>
-                  <td className='px-4 py-3'>
-                    <Link href={`/cases/${c.id}`} className='font-medium hover:text-sky-400'>
-                      {c.title}
-                    </Link>
-                    <p className='text-xs text-slate-500'>{c.case_number}</p>
-                  </td>
-                  <td className='px-4 py-3'>
-                    <span className={statusBadgeClass(c.status)}>{c.status.replace(/_/g, ' ')}</span>
-                  </td>
-                  <td className='px-4 py-3 text-slate-400'>
-                    {c.assigned_io?.full_name ?? c.assigned_io?.username ?? '—'}
-                  </td>
-                  <td className='px-4 py-3 text-slate-500'>{new Date(c.updated_at).toLocaleDateString()}</td>
-                </tr>
+      <div className="card p-5">
+        {total === 0 ? (
+          <p className="text-sm text-slate-500">
+            No cases visible to you yet — the status mix will appear here once
+            cases exist.
+          </p>
+        ) : (
+          <>
+            {/* Stacked proportion bar */}
+            <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+              {present.map((status) => (
+                <div
+                  key={status}
+                  className={STATUS_BAR_COLORS[status] ?? "bg-slate-300"}
+                  style={{ width: `${((counts[status] ?? 0) / total) * 100}%` }}
+                  title={`${status}: ${counts[status]}`}
+                />
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            </div>
+            {/* Legend chips */}
+            <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2">
+              {present.map((status) => (
+                <span key={status} className="flex items-center gap-1.5 text-xs text-slate-600">
+                  <span
+                    className={`inline-block h-2.5 w-2.5 rounded-full ${
+                      STATUS_BAR_COLORS[status] ?? "bg-slate-300"
+                    }`}
+                  />
+                  {status.replace(/_/g, " ")}
+                  <span className="font-semibold text-slate-900">
+                    {counts[status]}
+                  </span>
+                </span>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
     </section>
   );
 }
 
-export function ActivityList({ activity }: { activity: AuditLogEntry[] }) {
+/**
+ * Recent activity from the ADMIN-only audit API.
+ * `restricted` = the current user is not an administrator, so we show an
+ * honest explanation instead of pretending there is no activity.
+ */
+export function ActivityTimeline({
+  events,
+  restricted,
+}: {
+  events: AuditLogEntry[] | null;
+  restricted: boolean;
+}) {
   return (
     <section>
-      <div className='mb-4 flex items-center justify-between'>
-        <h2 className='text-lg font-semibold'>Recent Activity</h2>
-        <Link href='/audit' className='text-sm font-medium text-sky-400 hover:text-sky-300'>
-          View audit log →
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-base font-semibold text-slate-900">Recent Activity</h2>
+        <Link href="/audit" className="text-sm font-medium text-blue-600 hover:underline">
+          Open audit log →
         </Link>
       </div>
-      {activity.length === 0 ? (
-        <div className='rounded-xl border border-dashed border-slate-700 p-8 text-center text-slate-500'>
-          No recent activity.
-        </div>
-      ) : (
-        <div className='space-y-2'>
-          {activity.map((log) => (
-            <div key={log.id} className='flex items-center gap-4 rounded-lg border border-slate-800 bg-slate-900/50 px-4 py-3 text-sm'>
-              <span className='rounded-md bg-slate-800 px-2 py-0.5 text-xs font-semibold text-slate-300'>
-                {log.action}
-              </span>
-              <span className='text-slate-400'>{log.actor_username ?? 'system'}</span>
-              <span className='ml-auto text-xs text-slate-500'>
-                {new Date(log.created_at).toLocaleString()}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
+      <div className="card p-5">
+        {restricted ? (
+          <div className="flex items-start gap-3 text-sm text-slate-600">
+            <IconLock className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+            <p>
+              The detailed activity timeline is drawn from the audit trail,
+              which is available to administrator accounts only.
+            </p>
+          </div>
+        ) : events === null ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="skeleton h-10 w-full" />
+            ))}
+          </div>
+        ) : events.length === 0 ? (
+          <p className="text-sm text-slate-500">
+            No audit events recorded yet.
+          </p>
+        ) : (
+          <ol className="space-y-2.5">
+            {events.map((log) => (
+              <li
+                key={log.id}
+                className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-100 px-3 py-2 text-sm transition hover:bg-slate-50"
+              >
+                <span
+                  className={`rounded-md px-2 py-0.5 font-mono text-[11px] font-semibold ${actionBadgeClass(
+                    log.action
+                  )}`}
+                >
+                  {log.action}
+                </span>
+                <span className="text-slate-600">
+                  {log.actor_username ?? "system"}
+                </span>
+                <span className="ml-auto text-xs text-slate-500">
+                  {formatDateTime(log.created_at)}
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
     </section>
   );
-}
-
-export function statusBadgeClass(status: string): string {
-  const map: Record<string, string> = {
-    OPEN: 'rounded-md bg-sky-900/80 px-2 py-0.5 text-xs font-semibold text-sky-300',
-    UNDER_INVESTIGATION: 'rounded-md bg-amber-900/80 px-2 py-0.5 text-xs font-semibold text-amber-300',
-    UNDER_REVIEW: 'rounded-md bg-violet-900/80 px-2 py-0.5 text-xs font-semibold text-violet-300',
-    CHARGESHEET_FILED: 'rounded-md bg-orange-900/80 px-2 py-0.5 text-xs font-semibold text-orange-300',
-    COURT_STAGE: 'rounded-md bg-fuchsia-900/80 px-2 py-0.5 text-xs font-semibold text-fuchsia-300',
-    CLOSED: 'rounded-md bg-slate-800 px-2 py-0.5 text-xs font-semibold text-slate-300',
-    ARCHIVED: 'rounded-md bg-slate-800/60 px-2 py-0.5 text-xs font-semibold text-slate-400',
-  };
-  return map[status] ?? 'rounded-md bg-slate-800 px-2 py-0.5 text-xs font-semibold text-slate-300';
 }

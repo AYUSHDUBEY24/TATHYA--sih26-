@@ -2,35 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * SIH26190 design tokens (light enterprise theme).
+ * Anchors: Deep Navy #0f172a · Trust Blue #3b82f6 · Verified Emerald
+ * #10b981 · Warning Amber #f59e0b · Alert Rose #f43f5e · Background #f8fafc
+ */
 :root {
-  --background: 0 0% 100%;
-  --foreground: 222 47% 11%;
+  --background: 210 40% 98%;      /* #f8fafc */
+  --foreground: 222 47% 11%;      /* #0f172a */
   --card: 0 0% 100%;
   --card-foreground: 222 47% 11%;
-  --muted: 210 40% 96%;
-  --muted-foreground: 215 16% 47%;
-  --border: 214 32% 91%;
+  --muted: 210 40% 96%;           /* #f1f5f9 */
+  --muted-foreground: 215 16% 47%; /* #64748b */
+  --border: 214 32% 91%;          /* #e2e8f0 */
   --input: 214 32% 91%;
-  --ring: 221 83% 53%;
-  --primary: 221 83% 53%;
+  --ring: 217 91% 60%;            /* #3b82f6 */
+  --primary: 217 91% 60%;         /* #3b82f6 */
   --primary-foreground: 0 0% 100%;
   --secondary: 210 40% 96%;
   --secondary-foreground: 222 47% 11%;
   --accent: 210 40% 96%;
   --accent-foreground: 222 47% 11%;
-  --destructive: 0 72% 51%;
+  --destructive: 347 88% 61%;     /* #f43f5e */
   --destructive-foreground: 0 0% 100%;
-  --success: 142 71% 45%;
+  --success: 160 84% 39%;         /* #10b981 */
   --success-foreground: 0 0% 100%;
-  --warning: 38 92% 50%;
-  --warning-foreground: 0 0% 100%;
-  --info: 221 83% 53%;
+  --warning: 38 92% 50%;          /* #f59e0b */
+  --warning-foreground: 222 47% 11%;
+  --info: 217 91% 60%;
   --info-foreground: 0 0% 100%;
-  --sidebar-bg: 222 47% 11%;
   --sidebar-fg: 0 0% 100%;
-  --sidebar-muted: 215 16% 65%;
-  --sidebar-active: 221 83% 53%;
-  --sidebar-hover: 215 16% 25%;
+  --sidebar-muted: 215 20% 65%;
+  --sidebar-hover: 215 25% 20%;
 }
 
 * {
@@ -38,9 +41,185 @@
 }
 
 body {
-  background-color: hsl(var(--muted));
+  background-color: hsl(var(--background));
   color: hsl(var(--foreground));
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+@layer components {
+  /* --- Buttons (rounded-lg) --- */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50;
+  }
+  .btn:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+  .btn-primary {
+    @apply btn text-white shadow-sm;
+    background-color: hsl(var(--primary));
+  }
+  .btn-primary:hover {
+    background-color: hsl(var(--primary) / 0.9);
+  }
+  .btn-secondary {
+    @apply btn border bg-white text-slate-700;
+    border-color: hsl(var(--border));
+  }
+  .btn-secondary:hover {
+    background-color: hsl(var(--muted));
+    color: hsl(var(--foreground));
+  }
+  .btn-destructive {
+    @apply btn text-white;
+    background-color: hsl(var(--destructive));
+  }
+  .btn-destructive:hover {
+    background-color: hsl(var(--destructive) / 0.9);
+  }
+  .btn-ghost {
+    @apply btn text-slate-600;
+  }
+  .btn-ghost:hover {
+    background-color: hsl(var(--accent));
+    color: hsl(var(--foreground));
+  }
+  .btn-sm {
+    @apply h-8 px-3 text-xs;
+  }
+  .btn-md {
+    @apply h-10 px-4 py-2;
+  }
+  .btn-lg {
+    @apply h-12 px-6 text-base;
+  }
+
+  /*
+   * CRITICAL input contrast fix — every input/select/textarea gets:
+   * white background · slate-900 text · slate-400 placeholder ·
+   * slate-300 border · blue focus ring.
+   * Never add a dark background without a light text color.
+   */
+  .input {
+    @apply flex w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 transition-colors disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-70;
+  }
+  .input:focus {
+    @apply border-blue-500 outline-none ring-2 ring-blue-500/20;
+  }
+  .input option {
+    color: #0f172a;
+    background-color: #ffffff;
+  }
+  textarea.input {
+    @apply min-h-[2.5rem];
+  }
+  .label {
+    @apply mb-1 block text-sm font-medium text-slate-700;
+  }
+
+  /* --- Cards (rounded-xl, border, subtle shadow) --- */
+  .card {
+    @apply rounded-xl border shadow-card;
+    border-color: hsl(var(--border));
+    background-color: hsl(var(--card));
+    color: hsl(var(--card-foreground));
+  }
+
+  /* --- Badges --- */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  .badge-default {
+    background-color: hsl(var(--primary) / 0.1);
+    color: hsl(var(--primary));
+  }
+  .badge-success {
+    background-color: hsl(var(--success) / 0.12);
+    color: hsl(var(--success));
+  }
+  .badge-warning {
+    background-color: hsl(var(--warning) / 0.15);
+    color: #b45309;
+  }
+  .badge-destructive {
+    background-color: hsl(var(--destructive) / 0.12);
+    color: hsl(var(--destructive));
+  }
+  .badge-info {
+    background-color: hsl(var(--info) / 0.1);
+    color: hsl(var(--info));
+  }
+  .badge-muted {
+    background-color: hsl(var(--muted));
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* --- Tables --- */
+  .table-container {
+    @apply w-full overflow-auto rounded-xl border;
+    border-color: hsl(var(--border));
+    background-color: hsl(var(--card));
+  }
+  .table {
+    @apply w-full text-sm;
+  }
+  .table th {
+    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider;
+    background-color: hsl(var(--muted));
+    color: hsl(var(--muted-foreground));
+  }
+  .table td {
+    @apply px-4 py-3;
+    border-top: 1px solid hsl(var(--border));
+  }
+  .table tbody tr:hover {
+    background-color: hsl(var(--muted) / 0.5);
+  }
+
+  /* --- Skeleton --- */
+  .skeleton {
+    @apply animate-pulse rounded-md;
+    background-color: hsl(var(--muted));
+  }
+
+  /* --- Empty state --- */
+  .empty-state {
+    @apply flex flex-col items-center justify-center rounded-xl border border-dashed px-6 py-12 text-center;
+    border-color: hsl(var(--border));
+    background-color: hsl(var(--muted) / 0.4);
+  }
+
+  /* --- Toast animation --- */
+  .animate-toast-in {
+    animation: toast-in 0.22s ease-out;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Slim scrollbar for chat / table scroll areas */
+.slim-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.slim-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgb(148 163 184 / 0.4);
+  border-radius: 8px;
+}
+.slim-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 @layer components {

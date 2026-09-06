@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { prettifyEnum } from "@/lib/format";
 
 // --- Button ---
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -10,7 +11,6 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ variant = "primary", size = "md", className = "", ...props }, ref) => {
-    const base = "btn";
     const variants = {
       primary: "btn-primary",
       secondary: "btn-secondary",
@@ -21,7 +21,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <button
         ref={ref}
-        className={`${base} ${variants[variant]} ${sizes[size]} ${className}`}
+        className={`btn ${variants[variant]} ${sizes[size]} ${className}`}
         {...props}
       />
     );
@@ -48,7 +48,9 @@ export function CardHeader({
   className?: string;
 }) {
   return (
-    <div className={`border-b border-border px-6 py-4 ${className}`}>{children}</div>
+    <div className={`border-b border-slate-100 px-5 py-4 ${className}`}>
+      {children}
+    </div>
   );
 }
 
@@ -60,7 +62,7 @@ export function CardTitle({
   className?: string;
 }) {
   return (
-    <h3 className={`text-lg font-semibold text-foreground ${className}`}>
+    <h3 className={`text-base font-semibold text-slate-900 ${className}`}>
       {children}
     </h3>
   );
@@ -73,7 +75,7 @@ export function CardContent({
   children: React.ReactNode;
   className?: string;
 }) {
-  return <div className={`px-6 py-4 ${className}`}>{children}</div>;
+  return <div className={`px-5 py-4 ${className}`}>{children}</div>;
 }
 
 // --- Badge ---
@@ -94,12 +96,10 @@ export function Badge({
     info: "badge-info",
     muted: "badge-muted",
   };
-  return (
-    <span className={`${variants[variant]} ${className}`}>{children}</span>
-  );
+  return <span className={`badge ${variants[variant]} ${className}`}>{children}</span>;
 }
 
-// --- Input ---
+// --- Input (white bg / slate-900 text / slate-400 placeholder / slate-300 border / blue focus) ---
 export const Input = React.forwardRef<
   HTMLInputElement,
   React.InputHTMLAttributes<HTMLInputElement>
@@ -107,6 +107,41 @@ export const Input = React.forwardRef<
   return <input ref={ref} className={`input ${className}`} {...props} />;
 });
 Input.displayName = "Input";
+
+// --- Select ---
+export const Select = React.forwardRef<
+  HTMLSelectElement,
+  React.SelectHTMLAttributes<HTMLSelectElement>
+>(({ className = "", ...props }, ref) => {
+  return <select ref={ref} className={`input ${className}`} {...props} />;
+});
+Select.displayName = "Select";
+
+// --- Textarea ---
+export const Textarea = React.forwardRef<
+  HTMLTextAreaElement,
+  React.TextareaHTMLAttributes<HTMLTextAreaElement>
+>(({ className = "", ...props }, ref) => {
+  return <textarea ref={ref} className={`input ${className}`} {...props} />;
+});
+Textarea.displayName = "Textarea";
+
+// --- Label ---
+export function Label({
+  children,
+  htmlFor,
+  className = "",
+}: {
+  children: React.ReactNode;
+  htmlFor?: string;
+  className?: string;
+}) {
+  return (
+    <label htmlFor={htmlFor} className={`label ${className}`}>
+      {children}
+    </label>
+  );
+}
 
 // --- Empty State ---
 export function EmptyState({
@@ -122,10 +157,10 @@ export function EmptyState({
 }) {
   return (
     <div className="empty-state">
-      {icon && <div className="mb-4 text-muted-foreground">{icon}</div>}
-      <h3 className="text-lg font-medium text-foreground">{title}</h3>
+      {icon && <div className="mb-3 text-slate-400">{icon}</div>}
+      <h3 className="text-base font-medium text-slate-900">{title}</h3>
       {description && (
-        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+        <p className="mt-1 max-w-md text-sm text-slate-500">{description}</p>
       )}
       {action && <div className="mt-4">{action}</div>}
     </div>
@@ -149,39 +184,13 @@ export function TableSkeleton({ rows = 5 }: { rows?: number }) {
   );
 }
 
-// --- Stat Card ---
-export function StatCard({
-  label,
-  value,
-  icon,
-  trend,
-}: {
-  label: string;
-  value: string | number;
-  icon?: React.ReactNode;
-  trend?: { value: string; positive?: boolean };
-}) {
+// --- Spinner ---
+export function Spinner({ className = "h-4 w-4" }: { className?: string }) {
   return (
-    <Card>
-      <CardContent className="flex items-center gap-4">
-        {icon && (
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            {icon}
-          </div>
-        )}
-        <div>
-          <p className="text-sm text-muted-foreground">{label}</p>
-          <p className="text-2xl font-bold text-foreground">{value}</p>
-          {trend && (
-            <p
-              className={`text-xs ${trend.positive ? "text-success" : "text-destructive"}`}
-            >
-              {trend.value}
-            </p>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+    <span
+      className={`inline-block animate-spin rounded-full border-2 border-blue-500 border-t-transparent ${className}`}
+      aria-hidden="true"
+    />
   );
 }
 
@@ -190,36 +199,55 @@ export function PageHeader({
   title,
   description,
   action,
+  eyebrow,
 }: {
   title: string;
   description?: string;
   action?: React.ReactNode;
+  eyebrow?: string;
 }) {
   return (
     <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">{title}</h1>
+        {eyebrow && (
+          <p className="text-xs font-semibold uppercase tracking-wider text-blue-600">
+            {eyebrow}
+          </p>
+        )}
+        <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
         {description && (
-          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+          <p className="mt-1 text-sm text-slate-600">{description}</p>
         )}
       </div>
-      {action && <div className="flex gap-2">{action}</div>}
+      {action && <div className="flex flex-wrap gap-2">{action}</div>}
     </div>
   );
 }
 
-// --- Status Badge Helper ---
-export function StatusBadge({ status }: { status: string }) {
-  const normalized = status.toLowerCase();
-  let variant: "default" | "success" | "warning" | "destructive" | "info" | "muted" = "default";
-  if (["verified", "active", "open", "completed", "success"].includes(normalized)) {
-    variant = "success";
-  } else if (["pending", "under_investigation", "under_review", "processing"].includes(normalized)) {
-    variant = "warning";
-  } else if (["failed", "closed", "archived", "rejected"].includes(normalized)) {
-    variant = "destructive";
-  } else if (["chargesheet_filed", "court_stage"].includes(normalized)) {
-    variant = "info";
-  }
-  return <Badge variant={variant}>{status.replace(/_/g, " ")}</Badge>;
+// --- Status Badge (single source of truth for status colors) ---
+const STATUS_BADGE: Record<string, string> = {
+  OPEN: "badge badge-info",
+  UNDER_INVESTIGATION: "badge badge-warning",
+  UNDER_REVIEW: "badge bg-violet-100 text-violet-700",
+  CHARGESHEET_FILED: "badge bg-orange-100 text-orange-700",
+  COURT_STAGE: "badge bg-fuchsia-100 text-fuchsia-700",
+  CLOSED: "badge badge-muted",
+  ARCHIVED: "badge badge-muted",
+  VERIFIED: "badge badge-success",
+  INTEGRITY_FAILURE: "badge badge-destructive",
+  ACTIVE: "badge badge-success",
+  PENDING: "badge badge-warning",
+  FAILED: "badge badge-destructive",
+  CONFIRMED: "badge badge-success",
+};
+
+export function StatusBadge({
+  status,
+  className = "",
+}: {
+  status: string;
+  className?: string;
+}) {
+  const base = STATUS_BADGE[status] ?? "badge badge-muted";
+  return <span className={`${base} ${className}`}>{prettifyEnum(status)}</span>;
 }

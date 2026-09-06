@@ -5,9 +5,12 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/auth";
 import { CASE_STATUSES, UserBrief } from "@/lib/api-types";
+import { PageHeader } from "@/components/ui";
+import { useToast } from "@/components/Toast";
 
 export default function NewCasePage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [title, setTitle] = useState("");
   const [crimeType, setCrimeType] = useState("");
   const [policeStation, setPoliceStation] = useState("");
@@ -41,6 +44,7 @@ export default function NewCasePage() {
           assigned_io_id: assignedIoId || null,
         }),
       });
+      toast({ title: "Case created", variant: "success" });
       router.push(`/cases/${created.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create case");
@@ -49,53 +53,93 @@ export default function NewCasePage() {
     }
   }
 
-  const inputClass =
-    "w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-sky-500";
-
   return (
-    <main className="mx-auto min-h-screen max-w-2xl p-8">
-      <Link href="/cases" className="text-sm text-sky-400 underline">
-        ← Back to cases
-      </Link>
-      <h1 className="mb-6 mt-3 text-2xl font-bold">Create case</h1>
+    <div className="mx-auto max-w-3xl">
+      <PageHeader
+        eyebrow="Investigation"
+        title="Create case"
+        description="Register a new case. All authorization rules are enforced by the backend."
+      />
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="card space-y-5 p-6">
         <div>
-          <label className="mb-1 block text-sm text-slate-400" htmlFor="title">Title</label>
-          <input id="title" required minLength={3} value={title}
-            onChange={(e) => setTitle(e.target.value)} className={inputClass}
-            placeholder="Robbery at Central Market" />
+          <label className="label" htmlFor="title">
+            Title
+          </label>
+          <input
+            id="title"
+            required
+            minLength={3}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="input"
+            placeholder="Robbery at Central Market"
+          />
         </div>
-        <div className="grid grid-cols-2 gap-4">
+
+        <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-sm text-slate-400" htmlFor="crimeType">Crime type</label>
-            <input id="crimeType" required value={crimeType}
-              onChange={(e) => setCrimeType(e.target.value)} className={inputClass}
-              placeholder="ROBBERY" />
+            <label className="label" htmlFor="crimeType">
+              Crime type
+            </label>
+            <input
+              id="crimeType"
+              required
+              value={crimeType}
+              onChange={(e) => setCrimeType(e.target.value)}
+              className="input"
+              placeholder="ROBBERY"
+            />
           </div>
           <div>
-            <label className="mb-1 block text-sm text-slate-400" htmlFor="policeStation">Police station</label>
-            <input id="policeStation" required value={policeStation}
-              onChange={(e) => setPoliceStation(e.target.value)} className={inputClass}
-              placeholder="Central Police Station" />
+            <label className="label" htmlFor="policeStation">
+              Police station
+            </label>
+            <input
+              id="policeStation"
+              required
+              value={policeStation}
+              onChange={(e) => setPoliceStation(e.target.value)}
+              className="input"
+              placeholder="Central Police Station"
+            />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+
+        <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-sm text-slate-400" htmlFor="status">Status</label>
-            <select id="status" value={status} onChange={(e) => setStatus(e.target.value)} className={inputClass}>
+            <label className="label" htmlFor="status">
+              Status
+            </label>
+            <select
+              id="status"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="input"
+            >
               {CASE_STATUSES.map((s) => (
-                <option key={s} value={s}>{s}</option>
+                <option key={s} value={s}>
+                  {s.replace(/_/g, " ")}
+                </option>
               ))}
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-sm text-slate-400" htmlFor="assignedIo">
-              Assigned IO {officers.length === 0 && "(not available for your role)"}
+            <label className="label" htmlFor="assignedIo">
+              Assigned IO{" "}
+              {officers.length === 0 && (
+                <span className="font-normal text-slate-500">
+                  (not available for your role)
+                </span>
+              )}
             </label>
-            <select id="assignedIo" value={assignedIoId}
+            <select
+              id="assignedIo"
+              value={assignedIoId}
               onChange={(e) => setAssignedIoId(e.target.value)}
-              className={inputClass} disabled={officers.length === 0}>
+              className="input"
+              disabled={officers.length === 0}
+            >
               <option value="">— Unassigned —</option>
               {officers.map((o) => (
                 <option key={o.id} value={o.id}>
@@ -105,24 +149,39 @@ export default function NewCasePage() {
             </select>
           </div>
         </div>
+
         <div>
-          <label className="mb-1 block text-sm text-slate-400" htmlFor="description">Description (optional)</label>
-          <textarea id="description" rows={4} value={description}
-            onChange={(e) => setDescription(e.target.value)} className={inputClass}
-            placeholder="Synthetic demo case summary…" />
+          <label className="label" htmlFor="description">
+            Description (optional)
+          </label>
+          <textarea
+            id="description"
+            rows={4}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className="input"
+            placeholder="Synthetic demo case summary…"
+          />
         </div>
 
         {error && (
-          <p className="rounded-lg border border-rose-800 bg-rose-950/60 px-3 py-2 text-sm text-rose-300">
+          <p
+            role="alert"
+            className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
+          >
             {error}
           </p>
         )}
 
-        <button type="submit" disabled={busy}
-          className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:opacity-50">
-          {busy ? "Creating…" : "Create case"}
-        </button>
+        <div className="flex items-center gap-3 border-t border-slate-100 pt-4">
+          <button type="submit" disabled={busy} className="btn btn-primary btn-md">
+            {busy ? "Creating…" : "Create case"}
+          </button>
+          <Link href="/cases" className="btn btn-secondary btn-md">
+            Cancel
+          </Link>
+        </div>
       </form>
-    </main>
+    </div>
   );
 }

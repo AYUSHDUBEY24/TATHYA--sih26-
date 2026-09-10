@@ -17,6 +17,7 @@ from app.api.ai import router as ai_router
 from app.api.blockchain import router as blockchain_router
 from app.api.auth import router as auth_router
 from app.api.cases import router as cases_router
+from app.api.demo import router as demo_router
 from app.api.documents import router as documents_router
 from app.api.documents import versions_router
 from app.api.health import router as health_router
@@ -80,6 +81,7 @@ app.include_router(search_router, prefix="/api/search", tags=["search"])
 app.include_router(rag_router, prefix="/api/retrieval", tags=["rag"])
 app.include_router(ai_router, prefix="/api/ai", tags=["ai"])
 app.include_router(blockchain_router, prefix="/api/blockchain", tags=["blockchain"])
+app.include_router(demo_router, prefix="/api/demo", tags=["demo"])
 
 
 @app.get("/")

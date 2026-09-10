@@ -54,6 +54,10 @@ export default function DocumentsSection({ caseId }: { caseId: string }) {
   const [bcVerifyBusy, setBcVerifyBusy] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DocumentItem | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  // Demo tampering test (demo-only feature, see /api/demo endpoints)
+  const [demoConfirmOpen, setDemoConfirmOpen] = useState(false);
+  const [demoBusy, setDemoBusy] = useState<"tamper" | "restore" | null>(null);
+  const [demoTampered, setDemoTampered] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -124,6 +128,8 @@ export default function DocumentsSection({ caseId }: { caseId: string }) {
       setHistory(null);
       setBcStatus(null);
       setBcVerify(null);
+      setDemoTampered(false);
+      setDemoConfirmOpen(false);
       apiFetch<DocumentVersion[]>(`/api/documents/${doc.id}/versions`)
         .then(setHistory)
         .catch(() => setHistory(null));
@@ -186,6 +192,53 @@ export default function DocumentsSection({ caseId }: { caseId: string }) {
       );
     } catch {
       setBcStatus(null);
+    }
+  }
+
+  // --- DEMO tampering test (demo-only backend feature; verification itself
+  // stays entirely in the existing real endpoints — nothing is faked). ---
+  async function handleDemoTamper(doc: DocumentItem) {
+    setDemoBusy("tamper");
+    setError(null);
+    try {
+      await apiFetch(`/api/demo/${doc.id}/tamper`, { method: "POST" });
+      setDemoTampered(true);
+      setDemoConfirmOpen(false);
+      // Stale results must not linger — the user re-runs the REAL checks.
+      setIntegrity(null);
+      setBcVerify(null);
+      toast({
+        title: "Demo tampering applied",
+        description:
+          "The stored file was modified without a new version. Run Verify integrity / Verify Blockchain to see the real detection.",
+        variant: "info",
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Demo tampering failed");
+      setDemoConfirmOpen(false);
+    } finally {
+      setDemoBusy(null);
+    }
+  }
+
+  async function handleDemoRestore(doc: DocumentItem) {
+    setDemoBusy("restore");
+    setError(null);
+    try {
+      await apiFetch(`/api/demo/${doc.id}/restore`, { method: "POST" });
+      setDemoTampered(false);
+      setIntegrity(null);
+      setBcVerify(null);
+      toast({
+        title: "Original restored",
+        description:
+          "The exact original bytes were restored. Verification should report VERIFIED again.",
+        variant: "success",
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Demo restore failed");
+    } finally {
+      setDemoBusy(null);
     }
   }
 
@@ -621,34 +674,102 @@ export default function DocumentsSection({ caseId }: { caseId: string }) {
                         ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                         : bcVerify.status === "BLOCKCHAIN_UNAVAILABLE"
                         ? "border-amber-200 bg-amber-50 text-amber-800"
-                        : "border-rose-200 bg-rose-50 text-rose-800"
+                        : "border-2 border-rose-300 bg-rose-50 text-rose-800"
                     }`}
                   >
-                    <p className="font-semibold">
+                    <p className="font-bold">
                       {bcVerify.status === "VERIFIED"
-                        ? "Blockchain VERIFIED"
+                        ? "✅ BLOCKCHAIN VERIFIED"
                         : bcVerify.status === "FILE_INTEGRITY_FAILURE"
-                        ? "File integrity failure"
+                        ? "🚨 TAMPERED / INTEGRITY FAILURE"
                         : bcVerify.status === "BLOCKCHAIN_MISMATCH"
-                        ? "Blockchain hash mismatch"
+                        ? "🚨 TAMPERED / BLOCKCHAIN MISMATCH"
                         : bcVerify.status === "BLOCKCHAIN_UNAVAILABLE"
-                        ? "Blockchain unavailable"
-                        : "Not anchored"}
+                        ? "⚠️ Blockchain unavailable"
+                        : "— Not anchored"}
                     </p>
-                    {bcVerify.blockchain_hash && (
+                    {bcVerify.status !== "VERIFIED" &&
+                      bcVerify.status !== "BLOCKCHAIN_UNAVAILABLE" &&
+                      bcVerify.status !== "NOT_ANCHORED" && (
+                        <div className="mt-1.5 space-y-0.5">
+                          <p className="break-all font-mono">
+                            Expected hash: {shortHash(bcVerify.stored_hash)}
+                          </p>
+                          <p className="break-all font-mono">
+                            Actual hash: {shortHash(bcVerify.file_hash)}
+                          </p>
+                          {bcVerify.blockchain_hash && (
+                            <p className="break-all font-mono">
+                              Blockchain hash: {shortHash(bcVerify.blockchain_hash)}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    {bcVerify.blockchain_hash && bcVerify.status === "VERIFIED" && (
                       <p className="mt-1 break-all font-mono">
-                        On-chain: {shortHash(bcVerify.blockchain_hash, 14, 6)}
+                        On-chain: {shortHash(bcVerify.blockchain_hash)}
                       </p>
                     )}
                     {bcVerify.transaction_hash && (
                       <p className="break-all font-mono">
-                        Tx: {shortHash(bcVerify.transaction_hash, 14, 6)}
+                        Tx: {shortHash(bcVerify.transaction_hash)}
                       </p>
                     )}
                     {bcVerify.verified_at && (
                       <p>Verified: {formatDateTime(bcVerify.verified_at)}</p>
                     )}
                   </div>
+                )}
+              </div>
+
+              {/* DEMO TAMPERING TEST — clearly labeled demo control, never a
+                  production editing feature. The real verification endpoints
+                  remain the only source of truth. */}
+              <div className="rounded-lg border-2 border-dashed border-amber-300 bg-amber-50/60 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-amber-800">
+                    Demo Tampering Test
+                  </p>
+                  <span className="rounded bg-amber-200 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-amber-900">
+                    DEMO / TEST
+                  </span>
+                </div>
+                <p className="mt-1 text-[11px] text-amber-800">
+                  Intentionally modify this document to test whether TATHYA
+                  detects unauthorized changes.
+                </p>
+                <p className="mt-1 text-[10px] text-amber-700">
+                  No new version is created; the stored hash and blockchain
+                  record stay untouched — only the underlying file bytes change,
+                  so the real verification must report the mismatch.
+                </p>
+                <div className="mt-2.5 flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setDemoConfirmOpen(true)}
+                    disabled={demoBusy !== null}
+                    title="DEMO: modify the stored file so verification detects it"
+                  >
+                    {demoBusy === "tamper" ? "Modifying…" : "Simulate Tampering"}
+                  </Button>
+                  {demoTampered && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => selected && handleDemoRestore(selected)}
+                      disabled={demoBusy !== null}
+                      title="DEMO: restore the exact original bytes"
+                    >
+                      {demoBusy === "restore" ? "Restoring…" : "Restore Original"}
+                    </Button>
+                  )}
+                </div>
+                {demoTampered && (
+                  <p className="mt-2 text-[11px] font-medium text-rose-700">
+                    ⚠ File is currently modified — run “Verify integrity” or
+                    “Verify blockchain” above to see the real INTEGRITY FAILURE.
+                  </p>
                 )}
               </div>
 
@@ -788,6 +909,42 @@ export default function DocumentsSection({ caseId }: { caseId: string }) {
           )}
         </div>
       </div>
+
+      {/* DEMO tampering confirmation modal — required before any modification */}
+      <Modal
+        open={demoConfirmOpen}
+        onClose={() => (demoBusy ? undefined : setDemoConfirmOpen(false))}
+        title="Simulate Document Tampering?"
+        description="DEMO / TEST control — this is not a production editing feature."
+        footer={
+          <>
+            <button
+              onClick={() => setDemoConfirmOpen(false)}
+              disabled={demoBusy !== null}
+              className="btn btn-secondary btn-md"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => selected && handleDemoTamper(selected)}
+              disabled={demoBusy !== null}
+              className="btn btn-destructive btn-md"
+            >
+              {demoBusy === "tamper" ? "Modifying…" : "Simulate Tampering"}
+            </button>
+          </>
+        }
+      >
+        <p>
+          This will intentionally modify the stored document without creating a
+          new version. The next integrity/blockchain verification should detect
+          the change.
+        </p>
+        <p className="mt-2 text-xs text-slate-500">
+          The database hash and blockchain record are not touched, and
+          “Restore Original” can bring back the exact original bytes.
+        </p>
+      </Modal>
 
       {/* Delete confirmation modal */}
       <Modal

@@ -10,7 +10,7 @@ import {
 import { apiFetch, ApiError } from "@/lib/auth";
 import { AuditLogEntry, CaseListItem } from "@/lib/api-types";
 import { EmptyState, PageHeader, Skeleton } from "@/components/ui";
-import { actionBadgeClass, formatDateTime, resultBadgeClass } from "@/lib/format";
+import { actionBadgeClass, auditCategory, formatDateTime, resultBadgeClass } from "@/lib/format";
 import { IconLock } from "@/components/icons";
 
 const RESULT_FILTERS = [
@@ -18,6 +18,19 @@ const RESULT_FILTERS = [
   { value: "SUCCESS", label: "Success" },
   { value: "FAILURE", label: "Failure" },
   { value: "DENIED", label: "Denied" },
+];
+
+// Category chips (client-side over the loaded entries — the backend action
+// filter is exact-match, so categories are applied on the fetched page).
+const CATEGORY_FILTERS: Array<{ value: string; label: string }> = [
+  { value: "", label: "All" },
+  { value: "auth", label: "AUTH" },
+  { value: "document", label: "DOCUMENT" },
+  { value: "integrity", label: "INTEGRITY" },
+  { value: "permission", label: "PERMISSION" },
+  { value: "blockchain", label: "BLOCKCHAIN" },
+  { value: "case", label: "CASE" },
+  { value: "ai", label: "AI/RAG" },
 ];
 
 interface ActorOption {
@@ -32,6 +45,43 @@ function formatMeta(meta: Record<string, unknown>): string {
   } catch {
     return "";
   }
+}
+
+/** Typed access to known audit-metadata fields (only real data). */
+function metaStr(meta: Record<string, unknown>, key: string): string | null {
+  const value = meta[key];
+  return typeof value === "string" && value ? value : null;
+}
+
+function metaInt(meta: Record<string, unknown>, key: string): number | null {
+  const value = meta[key];
+  return typeof value === "number" ? value : null;
+}
+
+/**
+ * Optional readable summary for integrity/blockchain security events —
+ * rendered from whatever the real audit metadata already contains. Never
+ * invents fields that are absent.
+ */
+function renderSecurityMeta(
+  e: AuditLogEntry
+): Array<{ label: string; value: string; mono?: boolean }> {
+  const m = e.metadata ?? {};
+  const rows: Array<{ label: string; value: string; mono?: boolean }> = [];
+  const version = metaInt(m, "version");
+  const stored = metaStr(m, "stored_hash");
+  const current = metaStr(m, "current_hash");
+  const bc = metaStr(m, "blockchain_hash");
+  const tx = metaStr(m, "tx_hash");
+  const key = metaStr(m, "key");
+  if (version !== null) rows.push({ label: "Version", value: String(version) });
+  if (stored) rows.push({ label: "Expected SHA-256", value: stored, mono: true });
+  if (current)
+    rows.push({ label: "Actual SHA-256", value: current, mono: true });
+  if (bc) rows.push({ label: "Blockchain hash", value: bc, mono: true });
+  if (tx) rows.push({ label: "Transaction", value: tx, mono: true });
+  if (key) rows.push({ label: "BC key", value: key, mono: true });
+  return rows;
 }
 
 /**
@@ -54,6 +104,7 @@ export default function AuditPage() {
     case_id: "",
     result: "",
   });
+  const [category, setCategory] = useState("");
 
   // Dropdown sources (existing APIs only)
   const [userOptions, setUserOptions] = useState<Array<{ id: string; label: string }>>([]);
@@ -116,6 +167,16 @@ export default function AuditPage() {
     );
   }, [userOptions, entries]);
 
+  // Category filtering runs client-side over the loaded (real) entries —
+  // the backend `action` filter is exact-match only.
+  const visibleEntries = useMemo(
+    () =>
+      (entries ?? []).filter(
+        (e) => !category || auditCategory(e.action) === category
+      ),
+    [entries, category]
+  );
+
   return (
     <div className="mx-auto max-w-7xl">
       <PageHeader
@@ -146,6 +207,25 @@ export default function AuditPage() {
         <>
           {/* Filter chips + dropdowns */}
           <div className="card mb-6 space-y-4 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="mr-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                Category
+              </span>
+              {CATEGORY_FILTERS.map((f) => (
+                <button
+                  key={f.value || "all"}
+                  onClick={() => setCategory(f.value)}
+                  aria-pressed={category === f.value}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                    category === f.value
+                      ? "border-blue-600 bg-blue-600 text-white"
+                      : "border-slate-300 bg-white text-slate-600 hover:border-blue-400 hover:text-blue-600"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="mr-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
                 Result
@@ -285,7 +365,7 @@ export default function AuditPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {entries.map((e) => {
+                  {visibleEntries.map((e) => {
                     const metaJson = formatMeta(e.metadata);
                     const metaExpanded = expandedMeta === e.id;
                     return (
@@ -360,9 +440,25 @@ export default function AuditPage() {
                         {metaExpanded && metaJson && (
                           <tr className="bg-slate-50">
                             <td colSpan={8} className="px-4 py-3">
-                              <pre className="slim-scrollbar max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-lg border border-slate-200 bg-white p-3 font-mono text-[10px] text-slate-700">
-                                {JSON.stringify(e.metadata, null, 2)}
-                              </pre>
+                              <div className="space-y-2">
+                                {renderSecurityMeta(e).length > 0 && (
+                                  <dl className="grid grid-cols-[11rem_1fr] gap-x-3 gap-y-1 rounded-lg border border-slate-200 bg-white p-3 font-mono text-[11px] text-slate-800">
+                                    {renderSecurityMeta(e).map((row) => (
+                                      <>
+                                        <dt className="text-slate-500">
+                                          {row.label}
+                                        </dt>
+                                        <dd className="break-all">
+                                          {row.value}
+                                        </dd>
+                                      </>
+                                    ))}
+                                  </dl>
+                                )}
+                                <pre className="slim-scrollbar max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-lg border border-slate-200 bg-white p-3 font-mono text-[10px] text-slate-700">
+                                  {JSON.stringify(e.metadata, null, 2)}
+                                </pre>
+                              </div>
                             </td>
                           </tr>
                         )}

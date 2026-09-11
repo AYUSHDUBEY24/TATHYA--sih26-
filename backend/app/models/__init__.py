@@ -9,6 +9,7 @@ from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 from app.models.document_text import DocumentText
 from app.models.document_version import DocumentVersion
+from app.models.evidence import AssetTransfer, EvidenceAsset
 from app.models.role import Role
 from app.models.user import User
 
@@ -22,6 +23,8 @@ __all__ = [
     "DocumentChunk",
     "DocumentText",
     "DocumentVersion",
+    "EvidenceAsset",
+    "AssetTransfer",
     "Role",
     "User",
 ]

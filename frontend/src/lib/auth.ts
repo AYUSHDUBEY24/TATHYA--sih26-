@@ -20,9 +20,24 @@ export interface AuthUser {
 const TOKEN_KEY = "sih26190_token";
 const USER_KEY = "sih26190_user";
 
+/**
+ * Fired on window whenever the auth state changes (login/logout/401). This is
+ * the root-cause fix for the stale header: useAuth instances mounted elsewhere
+ * (e.g. AppShell) subscribe to this instead of reading localStorage only once
+ * at mount — client-side navigation after login never remounts them.
+ */
+export const AUTH_CHANGED_EVENT = "tathya:auth-changed";
+
+function notifyAuthChanged(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
+  }
+}
+
 export function saveAuth(token: string, user: AuthUser): void {
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
+  notifyAuthChanged();
 }
 
 export function getToken(): string | null {
@@ -42,6 +57,7 @@ export function getStoredUser(): AuthUser | null {
 export function clearAuth(): void {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  notifyAuthChanged();
 }
 
 export class ApiError extends Error {

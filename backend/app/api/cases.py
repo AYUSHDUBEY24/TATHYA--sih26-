@@ -19,6 +19,7 @@ from app.models.case_member import CaseMember
 from app.models.role import Role
 from app.models.user import User
 from app.schemas.case import (
+    CaseAccessResponse,
     CaseCreate,
     CaseDetailResponse,
     CaseMemberAdd,
@@ -34,17 +35,25 @@ router = APIRouter()
 
 
 def _generate_case_number(db: Session) -> str:
-    """Generate the next CASE-<year>-<seq> number for this year."""
+    """Generate the next CASE-<year>-<seq> number for this year.
+
+    Sequence numbers are parsed NUMERICALLY (not via string ordering) so
+    pre-existing rows with inconsistent zero-padding (e.g. a mixed
+    ``CASE-2026-0008`` alongside ``CASE-2026-007``) can never break sequence
+    generation or collide with an existing number.
+    """
     year = date.today().year
     prefix = f"CASE-{year}-"
-    last = db.scalar(
-        select(Case.case_number)
-        .where(Case.case_number.like(f"{prefix}%"))
-        .order_by(Case.case_number.desc())
-        .limit(1)
-    )
-    seq = int(last.rsplit("-", 1)[-1]) + 1 if last else 1
-    return f"{prefix}{seq:04d}"
+    seqs = db.scalars(
+        select(Case.case_number).where(Case.case_number.like(f"{prefix}%"))
+    ).all()
+    max_seq = 0
+    for value in seqs:
+        try:
+            max_seq = max(max_seq, int(value.rsplit("-", 1)[-1]))
+        except ValueError:
+            continue
+    return f"{prefix}{max_seq + 1:04d}"
 
 
 def _case_detail(case: Case, current_user: User, db: Session) -> CaseDetailResponse:
@@ -175,6 +184,45 @@ def get_case(
 ) -> CaseDetailResponse:
     case = get_authorized_case(case_id, current_user, db)
     return _case_detail(case, current_user, db)
+
+
+@router.get(
+    "/{case_id}/access",
+    response_model=CaseAccessResponse,
+    summary="Your effective permissions on this case (mirrors enforced rules)",
+)
+def get_my_case_access(
+    case_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CaseAccessResponse:
+    """
+    Powers the "Your Access" card. Every flag is computed from the SAME helper
+    rules the operative endpoints enforce — nothing is derived from the role
+    name alone and nothing is hardcoded client-side.
+    """
+    case = get_authorized_case(case_id, current_user, db)  # 404 if unauthorized
+    member = db.scalar(
+        select(CaseMember).where(
+            CaseMember.case_id == case.id, CaseMember.user_id == current_user.id
+        )
+    )
+    can_manage = user_can_manage_case(current_user, case)
+    # "Case access implies write" is the documented upload rule (upload and
+    # version endpoints authorize through the same case-access dependency);
+    # integrity verification likewise requires only authorized document access.
+    can_access = True
+    return CaseAccessResponse(
+        role=current_user.role.name,
+        case_role=member.role_in_case if member else None,
+        can_read=can_access,
+        can_upload=can_access,
+        can_create_version=can_access,
+        can_verify_integrity=can_access,
+        can_delete_documents=can_manage,
+        can_manage_case=can_manage,
+        can_administer=current_user.role.name == "ADMIN",
+    )
 
 
 @router.put(

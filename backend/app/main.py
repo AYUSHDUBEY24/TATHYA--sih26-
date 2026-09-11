@@ -20,6 +20,7 @@ from app.api.cases import router as cases_router
 from app.api.demo import router as demo_router
 from app.api.documents import router as documents_router
 from app.api.documents import versions_router
+from app.api.evidence import router as evidence_router
 from app.api.health import router as health_router
 from app.api.rag import router as rag_router
 from app.api.search import router as search_router
@@ -82,6 +83,7 @@ app.include_router(rag_router, prefix="/api/retrieval", tags=["rag"])
 app.include_router(ai_router, prefix="/api/ai", tags=["ai"])
 app.include_router(blockchain_router, prefix="/api/blockchain", tags=["blockchain"])
 app.include_router(demo_router, prefix="/api/demo", tags=["demo"])
+app.include_router(evidence_router, prefix="/api/evidence", tags=["evidence"])
 
 
 @app.get("/")

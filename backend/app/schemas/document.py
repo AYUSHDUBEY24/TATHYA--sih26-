@@ -49,6 +49,17 @@ class DocumentResponse(BaseModel):
     can_delete: bool = False
 
 
+class DeletedDocumentResponse(DocumentResponse):
+    """A soft-deleted document plus who deleted it and when.
+
+    Both fields come from the real DOCUMENT_DELETED audit entry — nothing is
+    inferred or fabricated.
+    """
+
+    deleted_by: str | None = None
+    deleted_at: datetime | None = None
+
+
 class DocumentVersionResponse(BaseModel):
     """Version metadata (internal object keys are never exposed)."""
 

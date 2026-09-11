@@ -85,6 +85,7 @@ export type AuditCategory =
   | "permission"
   | "case"
   | "ai"
+  | "search"
   | "other";
 
 export function auditCategory(action: string): AuditCategory {
@@ -96,6 +97,7 @@ export function auditCategory(action: string): AuditCategory {
     return "permission";
   if (action.startsWith("CASE_")) return "case";
   if (action.startsWith("AI_")) return "ai";
+  if (action.startsWith("SEARCH_") || action.startsWith("RAG_")) return "search";
   return "other";
 }
 
@@ -109,6 +111,7 @@ export function actionBadgeClass(action: string): string {
     permission: "bg-amber-100 text-amber-700",
     case: "bg-sky-100 text-sky-700",
     ai: "bg-fuchsia-100 text-fuchsia-700",
+    search: "bg-teal-100 text-teal-700",
     other: "bg-slate-100 text-slate-600",
   };
   return map[auditCategory(action)] ?? map.other;

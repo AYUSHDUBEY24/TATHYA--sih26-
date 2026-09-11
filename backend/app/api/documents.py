@@ -5,6 +5,7 @@ Phase 5: immutable version history + SHA-256 integrity verification.
 
 from datetime import datetime, timezone
 import logging
+from typing import Any
 from uuid import UUID
 
 from fastapi import (
@@ -41,11 +42,13 @@ from app.db.database import get_db
 from app.models.case import Case
 from app.models.case_member import CaseMember
 from app.models.document import Document
+from app.models.audit_log import AuditLog
 from app.models.document_version import DocumentVersion
 from app.models.user import User
 from app.schemas.auth import MessageResponse
 from app.schemas.case import UserBrief
 from app.schemas.document import (
+    DeletedDocumentResponse,
     DocumentResponse,
     DocumentVersionResponse,
     IntegrityResponse,
@@ -363,6 +366,68 @@ def list_documents(
 
 
 @router.get(
+    "/deleted",
+    response_model=list[DeletedDocumentResponse],
+    summary="Recycle bin — soft-deleted documents visible to you",
+)
+def list_deleted_documents(
+    case_id: UUID | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[DeletedDocumentResponse]:
+    """
+    List soft-deleted documents (status == DELETED). The storage objects and
+    version history are fully preserved; these rows are simply inactive.
+    Authorization mirrors list_documents: case members / assigned IO see their
+    cases' deleted documents, ADMIN sees everything. Delete/restore eligibility
+    is returned via the same server-computed ``can_delete`` rule.
+    """
+    stmt = select(Document).where(Document.status == "DELETED")
+    if case_id is not None:
+        case = get_authorized_case(case_id, current_user, db)
+        stmt = stmt.where(Document.case_id == case.id)
+    elif current_user.role.name != "ADMIN":
+        member_case_ids = select(CaseMember.case_id).where(
+            CaseMember.user_id == current_user.id
+        )
+        authorized_cases = select(Case.id).where(
+            (Case.assigned_io_id == current_user.id)
+            | (Case.id.in_(member_case_ids))
+        )
+        stmt = stmt.where(Document.case_id.in_(authorized_cases))
+    stmt = stmt.order_by(Document.updated_at.desc())
+    docs = db.scalars(stmt).all()
+
+    # Enrich with the real DOCUMENT_DELETED audit entries (actor + timestamp).
+    deleted_info: dict[UUID, tuple[str | None, Any]] = {}
+    if docs:
+        doc_ids = [d.id for d in docs]
+        rows = db.execute(
+            select(AuditLog, User.username)
+            .outerjoin(User, AuditLog.actor_id == User.id)
+            .where(
+                AuditLog.action == AuditAction.DOCUMENT_DELETED.value,
+                AuditLog.entity_id.in_(doc_ids),
+            )
+            .order_by(AuditLog.created_at.desc())
+        ).all()
+        for entry, username in rows:
+            if entry.entity_id not in deleted_info:
+                deleted_info[entry.entity_id] = (username, entry.created_at)
+
+    responses = []
+    for doc in docs:
+        base = _to_response(doc, current_user, db)
+        actor, at = deleted_info.get(doc.id, (None, None))
+        responses.append(
+            DeletedDocumentResponse(
+                **base.model_dump(mode="python"), deleted_by=actor, deleted_at=at
+            )
+        )
+    return responses
+
+
+@router.get(
     "/{document_id}",
     response_model=DocumentResponse,
     summary="Document metadata",
@@ -459,6 +524,57 @@ def delete_document(
     )
     db.commit()
     return MessageResponse(message="Document deleted")
+
+
+@router.post(
+    "/{document_id}/restore",
+    response_model=MessageResponse,
+    summary="Restore a soft-deleted document (ADMIN, case manager, or uploader)",
+)
+def restore_document(
+    document_id: UUID,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MessageResponse:
+    """
+    Return a soft-deleted document to its previous ACTIVE state.
+
+    The MinIO objects and the full version history were never removed by the
+    soft delete, so restore only flips the status — NO new version is created
+    and no hash/blockchain data changes. Authorization mirrors deletion: the
+    caller must have case access AND the same delete-level permission
+    (ADMIN / case manager / original uploader).
+    """
+    # NOTE: get_authorized_document is deliberately not used here — it hides
+    # non-ACTIVE documents. Case access + the delete-level rule are checked
+    # explicitly instead, so an unauthorized user gets 404 (no existence leak)
+    # and a member without delete rights gets 403.
+    document = db.get(Document, document_id)
+    if document is None or document.status != "DELETED":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
+    case = db.get(Case, document.case_id)
+    if case is None or not user_can_access_case(current_user, case, db):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found")
+    if not user_can_delete_document(current_user, document, db):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Insufficient permissions to restore this document",
+        )
+
+    document.status = "ACTIVE"
+    log_audit(
+        db,
+        AuditAction.DOCUMENT_RESTORED,
+        actor=current_user,
+        entity_type="DOCUMENT",
+        entity_id=document.id,
+        case_id=document.case_id,
+        ip_address=client_ip(request),
+        data={"file_name": document.file_name},
+    )
+    db.commit()
+    return MessageResponse(message="Document restored")
 
 
 # --------------------------------------------------------------------------

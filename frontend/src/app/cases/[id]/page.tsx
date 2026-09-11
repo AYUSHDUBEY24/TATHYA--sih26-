@@ -4,17 +4,21 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import DocumentsSection from "@/components/DocumentsSection";
+import EvidenceSection from "@/components/EvidenceSection";
 import { apiFetch } from "@/lib/auth";
 import {
   AuditLogEntry,
   CASE_STATUSES,
+  CaseAccess,
   CaseDetail,
+  DeletedDocumentInfo,
   UserBrief,
 } from "@/lib/api-types";
 import { useAuth } from "@/lib/useAuth";
 import { PageHeader, Skeleton, StatusBadge } from "@/components/ui";
 import { useToast } from "@/components/Toast";
-import { actionBadgeClass, formatDateTime } from "@/lib/format";
+import { actionBadgeClass, formatDateTime, prettifyEnum, timeAgo } from "@/lib/format";
+import { IconCheckCircle, IconHistory, IconRestore, IconXCircle } from "@/components/icons";
 
 export default function CaseDetailPage() {
   const params = useParams<{ id: string }>();
@@ -30,6 +34,10 @@ export default function CaseDetailPage() {
   const [newMemberEmail, setNewMemberEmail] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
   const [caseAudit, setCaseAudit] = useState<AuditLogEntry[] | null>(null);
+  // "Your Access" — computed by the backend from the enforced rules.
+  const [access, setAccess] = useState<CaseAccess | null>(null);
+  // Recycle bin for this case (soft-deleted documents).
+  const [deletedDocs, setDeletedDocs] = useState<DeletedDocumentInfo[] | null>(null);
 
   const [form, setForm] = useState({
     title: "",
@@ -72,6 +80,44 @@ export default function CaseDetailPage() {
       .then(setCaseAudit)
       .catch(() => setCaseAudit(null));
   }, [isAdmin, caseId]);
+
+  // "Your Access" — real backend-computed permissions (never role-guessed).
+  useEffect(() => {
+    if (!caseId) return;
+    apiFetch<CaseAccess>(`/api/cases/${caseId}/access`)
+      .then(setAccess)
+      .catch(() => setAccess(null));
+  }, [caseId]);
+
+  // Recycle bin listing for this case (soft-deleted documents).
+  const loadDeleted = useCallback(async () => {
+    if (!caseId) return;
+    try {
+      setDeletedDocs(
+        await apiFetch<DeletedDocumentInfo[]>(
+          `/api/documents/deleted?case_id=${caseId}`
+        )
+      );
+    } catch {
+      setDeletedDocs(null);
+    }
+  }, [caseId]);
+
+  useEffect(() => {
+    loadDeleted();
+  }, [loadDeleted]);
+
+  async function handleRestoreDeleted(doc: DeletedDocumentInfo) {
+    setActionError(null);
+    try {
+      await apiFetch(`/api/documents/${doc.id}/restore`, { method: "POST" });
+      toast({ title: "Document restored", description: doc.file_name, variant: "success" });
+      await loadDeleted();
+      await load();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Could not restore document");
+    }
+  }
 
   async function handleUpdate(event: FormEvent) {
     event.preventDefault();
@@ -288,6 +334,45 @@ export default function CaseDetailPage() {
         </dl>
       </div>
 
+      {/* YOUR ACCESS — computed by the backend from the enforced rules */}
+      {access && (
+        <div className="card mb-8 p-6">
+          <h2 className="text-base font-semibold text-slate-900">Your Access</h2>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Effective permissions computed by the backend from your role and
+            case membership — the same rules every API request enforces.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            <span className="badge badge-info">Role: {prettifyEnum(access.role)}</span>
+            {access.case_role && (
+              <span className="badge badge-muted">In case: {prettifyEnum(access.case_role)}</span>
+            )}
+          </div>
+          <ul className="mt-4 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
+            {[
+              { ok: access.can_read, label: "Read case & documents" },
+              { ok: access.can_upload, label: "Upload documents" },
+              { ok: access.can_create_version, label: "Create document versions" },
+              { ok: access.can_verify_integrity, label: "Verify integrity & blockchain" },
+              { ok: access.can_delete_documents, label: "Delete / restore documents" },
+              { ok: access.can_manage_case, label: "Manage case & members" },
+              { ok: access.can_administer, label: "System administration" },
+            ].map((p) => (
+              <li key={p.label} className="flex items-center gap-2">
+                {p.ok ? (
+                  <IconCheckCircle className="h-4 w-4 shrink-0 text-emerald-600" />
+                ) : (
+                  <IconXCircle className="h-4 w-4 shrink-0 text-slate-300" />
+                )}
+                <span className={p.ok ? "text-slate-800" : "text-slate-400"}>
+                  {p.label}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Case members */}
       <div className="card mb-8 p-6">
         <h2 className="mb-4 text-base font-semibold text-slate-900">Case members</h2>
@@ -343,8 +428,67 @@ export default function CaseDetailPage() {
         )}
       </div>
 
+      {/* Recently Deleted (recycle bin) — soft-deleted documents for this case */}
+      {deletedDocs && deletedDocs.length > 0 && (
+        <div className="card mb-8 p-6">
+          <div className="flex items-center gap-2">
+            <IconHistory className="h-4 w-4 text-slate-500" />
+            <h2 className="text-base font-semibold text-slate-900">
+              Recently Deleted
+            </h2>
+            <span className="badge badge-muted text-[10px]">
+              files and version history are preserved
+            </span>
+          </div>
+          <ul className="mt-4 space-y-2">
+            {deletedDocs.map((d) => (
+              <li
+                key={d.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5 text-sm"
+              >
+                <div className="min-w-0">
+                  <p
+                    title={d.file_name}
+                    className="truncate font-medium text-slate-800"
+                  >
+                    {d.file_name}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Case {detail.case_number} ·{" "}
+                    {d.deleted_by
+                      ? `Deleted by ${d.deleted_by}`
+                      : "Deleted by unknown"}
+                    {d.deleted_at ? ` · ${formatDateTime(d.deleted_at)}` : ""}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {d.can_delete && (
+                    <button
+                      onClick={() => handleRestoreDeleted(d)}
+                      className="btn btn-secondary btn-sm"
+                      title="Restore to the active document list (no new version)"
+                    >
+                      <IconRestore className="h-3.5 w-3.5" />
+                      Restore
+                    </button>
+                  )}
+                  {!d.can_delete && (
+                    <span className="text-xs text-slate-400">
+                      No restore permission
+                    </span>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Documents: list + upload (left) and detail/integrity/blockchain panel (right) */}
       <DocumentsSection caseId={detail.id} />
+
+      {/* Evidence assets + chain of custody (vertical timeline) */}
+      <EvidenceSection caseId={detail.id} />
 
       {/* Case audit timeline (ADMIN only — hidden for other roles) */}
       {isAdmin && (

@@ -177,6 +177,27 @@ export interface SearchResponse {
   results: SearchHit[];
 }
 
+/* --- Recycle bin (soft delete / restore) --- */
+
+export interface DeletedDocumentInfo extends DocumentItem {
+  deleted_by: string | null;
+  deleted_at: string | null;
+}
+
+/* --- Your Access (computed by the backend from enforced rules) --- */
+
+export interface CaseAccess {
+  role: string;
+  case_role: string | null;
+  can_read: boolean;
+  can_upload: boolean;
+  can_create_version: boolean;
+  can_verify_integrity: boolean;
+  can_delete_documents: boolean;
+  can_manage_case: boolean;
+  can_administer: boolean;
+}
+
 /* --- AI Assistant (Phase 9B) --- */
 
 export interface AICitation {
@@ -196,4 +217,60 @@ export interface AIQueryResponse {
   sources: AICitation[];
   provider: string;
 }
+
+/* --- Evidence / Chain of Custody --- */
+
+export const EVIDENCE_ASSET_TYPES = [
+  "LAPTOP",
+  "MOBILE_PHONE",
+  "USB_DRIVE",
+  "DOCUMENT",
+  "STORAGE_DEVICE",
+  "OTHER",
+] as const;
+
+export const EVIDENCE_TRANSFER_ACTIONS = [
+  "COLLECTED",
+  "TRANSFERRED",
+  "EXAMINED",
+  "STORED",
+  "RELEASED",
+] as const;
+
+export interface AssetTransfer {
+  id: string;
+  action: string;
+  from_party: string | null;
+  to_party: string | null;
+  purpose: string | null;
+  occurred_at: string;
+  actor_id: string;
+  actor_name: string;
+}
+
+export interface EvidenceAsset {
+  id: string;
+  case_id: string;
+  asset_tag: string;
+  name: string;
+  asset_type: string;
+  description: string | null;
+  status: string;
+  current_holder: string;
+  registered_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EvidenceAssetDetail extends EvidenceAsset {
+  transfers: AssetTransfer[];
+}
+
+export interface ChainOfCustody {
+  asset: EvidenceAsset;
+  case_number: string;
+  case_title: string;
+  transfers: AssetTransfer[];
+}
+
 

@@ -85,6 +85,28 @@ class CaseDetailResponse(CaseResponse):
     can_manage: bool
 
 
+class CaseAccessResponse(BaseModel):
+    """
+    The current user's EFFECTIVE permissions on one case — computed by the
+    backend from the exact same rules the API endpoints enforce (case access,
+    management rule, role). Used by the "Your Access" card so the UI shows the
+    real authorization state instead of guessing from the role name.
+    """
+
+    role: str
+    # role_in_case for members (e.g. "INVESTIGATOR"), None otherwise.
+    case_role: str | None = None
+    can_read: bool
+    can_upload: bool
+    can_create_version: bool
+    can_verify_integrity: bool
+    # Delete rule is per-document (manager/admin OR the uploader); at case
+    # level this reflects the manager/admin branch of that rule.
+    can_delete_documents: bool
+    can_manage_case: bool
+    can_administer: bool
+
+
 class CaseMemberAdd(BaseModel):
     # Identify the new member either by user_id or by email.
     user_id: UUID | None = None

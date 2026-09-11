@@ -618,6 +618,14 @@ export default function DocumentsSection({ caseId }: { caseId: string }) {
                 </div>
                 <div className="mt-2">
                   <BlockchainStatusBadge status={bcStatus?.status ?? null} />
+                  {bcStatus?.status === "CONFIRMED" &&
+                    bcVerify?.status === "BLOCKCHAIN_UNAVAILABLE" && (
+                      <p className="mt-1 text-[11px] text-amber-700">
+                        ⚠ Historical record — live chain verification
+                        currently unavailable (run Verify blockchain for the
+                        actual live state)
+                      </p>
+                    )}
                 </div>
                 {bcStatus ? (
                   <div className="mt-2 space-y-0.5 text-[11px] text-slate-600">
@@ -685,9 +693,17 @@ export default function DocumentsSection({ caseId }: { caseId: string }) {
                         : bcVerify.status === "BLOCKCHAIN_MISMATCH"
                         ? "🚨 TAMPERED / BLOCKCHAIN MISMATCH"
                         : bcVerify.status === "BLOCKCHAIN_UNAVAILABLE"
-                        ? "⚠️ Blockchain unavailable"
+                        ? "⚠️ Blockchain Record Found — Current Chain Verification Unavailable"
                         : "— Not anchored"}
                     </p>
+                    {bcVerify.status === "BLOCKCHAIN_UNAVAILABLE" && (
+                      <p className="mt-1 text-amber-800">
+                        An anchoring record exists (Tx below), but the currently
+                        connected chain could not verify it live — the local
+                        chain may have been reset or is unreachable. The record
+                        is shown as historical, not re-verified.
+                      </p>
+                    )}
                     {bcVerify.status !== "VERIFIED" &&
                       bcVerify.status !== "BLOCKCHAIN_UNAVAILABLE" &&
                       bcVerify.status !== "NOT_ANCHORED" && (
@@ -722,26 +738,27 @@ export default function DocumentsSection({ caseId }: { caseId: string }) {
                 )}
               </div>
 
-              {/* DEMO TAMPERING TEST — clearly labeled demo control, never a
+              {/* TAMPER DETECTION TEST — clearly labeled demo control, never a
                   production editing feature. The real verification endpoints
                   remain the only source of truth. */}
               <div className="rounded-lg border-2 border-dashed border-amber-300 bg-amber-50/60 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs font-semibold text-amber-800">
-                    Demo Tampering Test
+                    Tamper Detection Test
                   </p>
                   <span className="rounded bg-amber-200 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-amber-900">
                     DEMO / TEST
                   </span>
                 </div>
                 <p className="mt-1 text-[11px] text-amber-800">
-                  Intentionally modify this document to test whether TATHYA
-                  detects unauthorized changes.
+                  Integrity attack simulation — intentionally modify this
+                  document to test whether TATHYA detects unauthorized changes.
                 </p>
                 <p className="mt-1 text-[10px] text-amber-700">
-                  No new version is created; the stored hash and blockchain
-                  record stay untouched — only the underlying file bytes change,
-                  so the real verification must report the mismatch.
+                  Flow: hash anchored → stored bytes modified → verification →
+                  INTEGRITY FAILURE → Restore Original → verified again. No new
+                  version is created; the stored hash and blockchain record stay
+                  untouched.
                 </p>
                 <div className="mt-2.5 flex flex-wrap gap-2">
                   <Button

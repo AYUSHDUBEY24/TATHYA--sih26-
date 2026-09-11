@@ -134,6 +134,10 @@ export const IconHistory = makeIcon(
   <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
 );
 
+export const IconRestore = makeIcon(
+  <path d="M3 3v5h5M3.05 13A9 9 0 106 5.3L3 8m1 14v-6h6" />
+);
+
 /**
  * TATHYA product logo mark — shield + checkmark in a trust-blue gradient
  * square. Used in the sidebar and login screen.

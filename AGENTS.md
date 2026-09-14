@@ -2,7 +2,7 @@
 
 ## 0. Project Context
 
-We are building a Smart India Hackathon 2026 prototype for:
+We are building a Smart India Hackathon 2026 prototype for:::
 
 * Problem Statement ID: SIH26190
 * Title: Secure Digital Document Management System for Legal and Investigation Documents

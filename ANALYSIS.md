@@ -1377,7 +1377,7 @@ Start with:
 
 User Login
 
-Then:
+
 
 Case creation/opening
  ↓

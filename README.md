@@ -333,7 +333,7 @@ assault, property crime, arms trafficking, missing persons and embezzlement scen
 * **Tamper** — the core differentiator: blockchain-anchored integrity proof
 * **RBAC** — backend-enforced, not just hidden buttons
 
----
+---------------------------------------------------------
 
 ## 13. Status & Scope
 
@@ -346,7 +346,7 @@ or national-scale deployment.
 version control, SHA-256 integrity, blockchain anchoring, audit trail, search, OCR, and a
 permission-aware RAG/AI assistant.
 
----
+---------------------------------------------------
 
 ## 14. Documentation
 

@@ -346,7 +346,7 @@ or national-scale deployment.
 version control, SHA-256 integrity, blockchain anchoring, audit trail, search, OCR, and a
 permission-aware RAG/AI assistant.
 
----------------------------------------------------
+---------------------------------------------------------
 
 ## 14. Documentation
 
